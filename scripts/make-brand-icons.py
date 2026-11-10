@@ -1,8 +1,7 @@
-# Gera os ícones do Ping a partir da arte do sino (assets/brand/ping-bell.png):
-#   - assets/adaptive-icon.png   frente do ícone adaptativo (sino com contorno, fundo transparente)
-#   - assets/icon.png            ícone quadrado completo (fundo verde + sino)
+# Gera os ícones de notificação do Ping a partir da arte do sino (assets/brand/ping-bell.png):
 #   - assets/notification-icon.png e assets/notification-icons/ping_notif_*.png
 #       silhuetas brancas para a barra de status: sorrindo (no horário), sério (+1 h) e exclamação (+3 h)
+# O ícone do app vem do logo completo: veja scripts/make-app-icon.py.
 # Uso: python scripts/make-brand-icons.py   (requer Pillow; rode na raiz do projeto)
 import math
 import os
@@ -11,7 +10,6 @@ from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ART = os.path.join(ROOT, 'assets', 'brand', 'ping-bell.png')
-BG = (14, 51, 32)  # verde do quadro da arte; igual ao backgroundColor do adaptiveIcon no app.json
 
 art = Image.open(ART).convert('RGB')
 W, H = art.size
@@ -173,29 +171,4 @@ happy.save(os.path.join(icons, 'ping_notif_no_horario.png'), optimize=True)
 silhouette('flat', 2).save(os.path.join(icons, 'ping_notif_atraso_1h.png'), optimize=True)
 silhouette('alert', 3).save(os.path.join(icons, 'ping_notif_atraso_3h.png'), optimize=True)
 
-# --- frente do ícone adaptativo: sino colorido com contorno, sem o quadro verde ---
-near = lime_c.filter(ImageFilter.MaxFilter(71))  # contorno fica até ~30 px do limão
-fg = Image.new('L', (cw, ch), 0); fp = fg.load()
-lc, dc, nc = lime_c.load(), dark_c.load(), near.load()
-for y in range(ch):
-    for x in range(cw):
-        if lc[x, y] > 127 or (dc[x, y] > 127 and nc[x, y] > 127):
-            fp[x, y] = 255
-fg = fill_holes(fg).filter(ImageFilter.MedianFilter(3)).filter(ImageFilter.GaussianBlur(0.8))
-fore = art_c.convert('RGBA'); fore.putalpha(fg)
-fore = fore.crop(fg.getbbox())
-
-
-def place(img, canvas_px, content_px, bg=None):
-    s = content_px / max(img.size)
-    im = img.resize((round(img.size[0]*s), round(img.size[1]*s)), Image.LANCZOS)
-    canvas = Image.new('RGBA', (canvas_px, canvas_px), bg + (255,) if bg else (0, 0, 0, 0))
-    canvas.alpha_composite(im, ((canvas_px-im.size[0])//2, (canvas_px-im.size[1])//2))
-    return canvas
-
-
-# Zona segura do ícone adaptativo: círculo de 66% do lado. O desenho ocupa 60% para caber em
-# qualquer máscara (círculo, gota, quadrado arredondado).
-place(fore, 1024, 610).save(os.path.join(ROOT, 'assets', 'adaptive-icon.png'), optimize=True)
-place(fore, 1024, 760, BG).convert('RGB').save(os.path.join(ROOT, 'assets', 'icon.png'), optimize=True)
 print('ok')
