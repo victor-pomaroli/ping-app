@@ -21,6 +21,11 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.4.3] — 2026-11-10
+
+### Corrigido
+- O rosto do Ping e o formato de conversa não apareciam: a biblioteca de notificações diz que todo aviso local "já tem imagem", e isso desligava o rosto. Agora o rosto é aplicado sempre que o aviso tem um.
+
 ## [1.4.2] — 2026-11-10
 
 ### Alterado

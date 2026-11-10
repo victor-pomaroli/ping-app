@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ping",
     "slug": "ping",
-    "version": "1.4.2",
+    "version": "1.4.3",
     "scheme": "ping",
     "icon": "./assets/icon.png",
     "plugins": [
@@ -38,7 +38,7 @@
     ],
     "android": {
       "package": "com.example.ping",
-      "versionCode": 10402,
+      "versionCode": 10403,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#10301B"
