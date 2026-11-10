@@ -41,7 +41,7 @@
       "versionCode": 10400,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0B0C0B"
+        "backgroundColor": "#0E3320"
       },
       "permissions": [
         "android.permission.SCHEDULE_EXACT_ALARM",
