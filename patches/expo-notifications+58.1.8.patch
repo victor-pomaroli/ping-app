@@ -1,5 +1,5 @@
 diff --git a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
-index 769b552..4b7c995 100644
+index 769b552..9577bd1 100644
 --- a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
 +++ b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
 @@ -2,6 +2,7 @@ package expo.modules.notifications.notifications.presentation.builders
@@ -31,7 +31,7 @@ index 769b552..4b7c995 100644
      builder.setPriority(priority)
  
      val content = notificationContent
-@@ -107,6 +113,11 @@ open class ExpoNotificationBuilder(
+@@ -107,6 +113,14 @@ open class ExpoNotificationBuilder(
      // Sets the text/contentText as the bigText to allow the notification to be expanded and the
      // entire text to be viewed.
      builder.setStyle(NotificationCompat.BigTextStyle().bigText(content.text))
@@ -39,11 +39,14 @@ index 769b552..4b7c995 100644
 +    // that replace the small icon with the app icon (Samsung One UI) still show the face as avatar.
 +    // Note: local NotificationContent.containsImage() always returns true, so it can't gate this.
 +    val pingFace = largeIconFromData(content.body)
-+    pingFace?.let { applyPingConversation(builder, content, it) }
++    // data.pingStyle == "classic" keeps the standard layout (face only as large icon), for comparison.
++    if (pingFace != null && content.body?.optString("pingStyle", "") != "classic") {
++      applyPingConversation(builder, content, pingFace)
++    }
  
      color?.let { builder.color = it.toInt() }
      notificationContent.badgeCount?.toInt()?.let { builder.setNumber(it) }
-@@ -152,7 +163,10 @@ open class ExpoNotificationBuilder(
+@@ -152,7 +166,10 @@ open class ExpoNotificationBuilder(
        )
      )
  
@@ -55,7 +58,7 @@ index 769b552..4b7c995 100644
        val bitmap = notificationContent.getImage(context)
        bitmap?.let { builder.setLargeIcon(it) }
      } else {
-@@ -161,6 +175,90 @@ open class ExpoNotificationBuilder(
+@@ -161,6 +178,90 @@ open class ExpoNotificationBuilder(
      return builder.build()
    }
  
@@ -146,7 +149,7 @@ index 769b552..4b7c995 100644
    private fun applySoundsAndVibrations(content: INotificationContent, builder: NotificationCompat.Builder) {
      val shouldPlaySound = shouldPlaySound()
      val shouldVibrate = shouldVibrate()
-@@ -390,6 +488,7 @@ open class ExpoNotificationBuilder(
+@@ -390,6 +491,7 @@ open class ExpoNotificationBuilder(
        "expo.modules.notifications.default_notification_color"
      const val EXTRAS_MARSHALLED_NOTIFICATION_REQUEST_KEY: String = "expo.notification_request"
      const val EXTRAS_BODY_KEY = "body"

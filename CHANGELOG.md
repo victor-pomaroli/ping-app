@@ -21,6 +21,11 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.4.5] — 2026-11-10
+
+### Alterado
+- O teste de notificação manda um 4º aviso no formato clássico (rosto como imagem à direita), para comparar com o formato de conversa no aparelho.
+
 ## [1.4.4] — 2026-11-10
 
 ### Corrigido

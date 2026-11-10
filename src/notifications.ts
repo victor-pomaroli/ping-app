@@ -193,8 +193,8 @@ export async function cancelOrphanNotifications(loadKnown:()=>Promise<Set<string
   return orphans.length;
 }
 /**
- * Teste em Ajustes: três avisos seguidos (10, 20 e 30 s) com o rosto e a mensagem de cada momento
- * da personalidade escolhida — no horário, +1 h e +3 h — para conferir os rostos no aparelho.
+ * Teste em Ajustes: avisos seguidos (a cada 10 s) com o rosto e a mensagem de cada momento
+ * da personalidade escolhida — no horário, +1 h e +3 h — e um 4º no formato clássico, para comparar.
  */
 export async function testNotification(){
   const permission=await Notifications.getPermissionsAsync();
@@ -203,20 +203,22 @@ export async function testNotification(){
   // Um teste por vez: tocar várias vezes no botão não empilha avisos.
   const previous=(await Notifications.getAllScheduledNotificationsAsync()).filter(n=>n.content.data?.kind==='test').map(n=>n.identifier);
   await cancelTaskReminders(previous);
-  const steps:{stage:ReminderStage;moment:FaceMoment;label:string}[]=[
+  // O 4º aviso usa o formato clássico (rosto só como imagem à direita) para comparar com a conversa.
+  const steps:{stage:ReminderStage;moment:FaceMoment;label:string;classic?:boolean}[]=[
     {stage:0,moment:'no_horario',label:'no horário'},
     {stage:2,moment:'atraso_1h',label:'1 h de atraso'},
     {stage:3,moment:'atraso_3h',label:'3 h de atraso'},
+    {stage:3,moment:'atraso_3h',label:'formato clássico',classic:true},
   ];
   const ids:string[]=[];
   for(let i=0;i<steps.length;i++){
-    const {stage,moment,label}=steps[i];
+    const {stage,moment,label,classic}=steps[i];
     const face=notificationFace(prefs.personality,moment);
     ids.push(await Notifications.scheduleNotificationAsync({
       content:{
         title:prefs.privatePreviews?'Ping - lembrete':`Teste do Ping · ${label}`,
         body:prefs.privatePreviews?'Abra o Ping para conferir seu lembrete.':reminderMessage('general',stage,0,prefs.displayName,prefs.addressStyle,prefs.personality),
-        data:{kind:'test',...(face?{largeIcon:face.largeIcon,smallIcon:face.smallIcon}:{})},
+        data:{kind:'test',...(face?{largeIcon:face.largeIcon,smallIcon:face.smallIcon}:{}),...(classic?{pingStyle:'classic'}:{})},
         ...(face&&Platform.OS==='android'?{color:face.color}:{}),
       },
       trigger:dateTrigger(Date.now()+10000*(i+1)),
