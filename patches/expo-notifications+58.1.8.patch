@@ -1,0 +1,34 @@
+diff --git a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
+index 769b552..49b12a5 100644
+--- a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
++++ b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
+@@ -156,11 +156,28 @@ open class ExpoNotificationBuilder(
+       val bitmap = notificationContent.getImage(context)
+       bitmap?.let { builder.setLargeIcon(it) }
+     } else {
+-      builder.setLargeIcon(largeIcon)
++      // Ping: data.largeIcon names a bundled drawable (the bell face for this delay).
++      builder.setLargeIcon(largeIconFromData(notificationContent.body) ?: largeIcon)
+     }
+     return builder.build()
+   }
+ 
++  private fun largeIconFromData(data: org.json.JSONObject?): Bitmap? {
++    val name = data?.optString("largeIcon", "") ?: return null
++    if (!name.matches(Regex("^ping_face_[a-z0-9_]+$"))) return null
++    val id = context.resources.getIdentifier(name, "drawable", context.packageName)
++    if (id == 0) {
++      Log.w("expo-notifications", "Large icon \"$name\" not found in drawables")
++      return null
++    }
++    return try {
++      BitmapFactory.decodeResource(context.resources, id)
++    } catch (e: Exception) {
++      Log.w("expo-notifications", "Could not decode large icon \"$name\": ${e.message}")
++      null
++    }
++  }
++
+   private fun applySoundsAndVibrations(content: INotificationContent, builder: NotificationCompat.Builder) {
+     val shouldPlaySound = shouldPlaySound()
+     val shouldVibrate = shouldVibrate()

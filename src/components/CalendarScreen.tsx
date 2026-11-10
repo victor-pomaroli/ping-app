@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {View,Text,Pressable,ActivityIndicator,StyleSheet} from 'react-native';
 import {useRouter} from 'expo-router';
-import {CalendarDaySummary,CalendarEntry,listCalendarDay,listCalendarMonth,completeTask} from '../store';
+import {CalendarDaySummary,CalendarEntry,CalendarSubtask,listCalendarDay,listCalendarMonth,completeTask} from '../store';
 import {useAppTheme,ThemeColors,priorityColors} from '../theme';
 import {categories} from '../templates';
 import {TaskTitle} from './TaskTitle';
@@ -75,10 +75,11 @@ export function CalendarScreen({active,refreshKey,selected,onSelect}:{active:boo
   const pendingCount=taskEntries.filter(e=>!e.completed).length;
   const dayMeta=[eventCount?`${eventCount} evento${eventCount===1?'':'s'}`:'',taskEntries.length?`${taskEntries.length} tarefa${taskEntries.length===1?'':'s'} · ${pendingCount} pendente${pendingCount===1?'':'s'}`:''].filter(Boolean).join(' · ');
 
-  async function toggle(entry:CalendarEntry){
+  async function toggle(entry:CalendarEntry,sub?:CalendarSubtask){
     // Rotina só pode ser marcada no próprio dia; o histórico dos outros dias é só leitura.
     if(entry.routine&&dayId!==todayId)return;
-    try{await completeTask(entry.task.id,!entry.completed);monthCache.current.clear();dayCache.current.clear();setRevision(x=>x+1);}
+    const target=sub??entry;
+    try{await completeTask(target.task.id,!target.completed);monthCache.current.clear();dayCache.current.clear();setRevision(x=>x+1);}
     catch(e){setError(String(e));}
   }
 
@@ -130,16 +131,27 @@ export function CalendarScreen({active,refreshKey,selected,onSelect}:{active:boo
       const locked=entry.routine&&dayId!==todayId;
       const t=entry.task;
       const time=t.no_due?'Sem horário':new Date(t.due_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-      return <Pressable key={t.id} onPress={()=>router.push({pathname:'/edit',params:{id:String(t.id)}})} style={s.row}>
+      const subs=entry.subtasks,subsDone=subs.filter(x=>x.completed).length;
+      return <View key={t.id}>
+      <Pressable onPress={()=>router.push({pathname:'/edit',params:{id:String(t.id)}})} style={s.row}>
         <Pressable accessibilityRole="checkbox" accessibilityLabel={entry.completed?'Marcar como pendente':'Concluir tarefa'} accessibilityState={{checked:entry.completed,disabled:locked}} disabled={locked} hitSlop={8} onPress={()=>toggle(entry)} style={[s.check,entry.completed&&s.checked,locked&&{opacity:0.45}]}>
           <Text style={s.checkText}>{entry.completed?'✓':''}</Text>
         </Pressable>
         <View style={{flex:1,minWidth:0}}>
           <TaskTitle key={`${t.id}-${entry.completed}`} title={t.title} completed={entry.completed} colors={c} numberOfLines={2} style={{fontSize:16,fontWeight:'700',letterSpacing:0}}/>
-          <Text style={s.meta}>{entry.routine?'↻ '+time:time} · {categories[t.category]}</Text>
+          <Text style={s.meta}>{entry.routine?'↻ '+time:time} · {categories[t.category]}{subs.length?` · ${subsDone}/${subs.length} subtarefas`:''}</Text>
         </View>
         <View style={[s.priority,{backgroundColor:priorityColors[t.priority]}]}/>
-      </Pressable>;
+      </Pressable>
+      {subs.map(sub=><Pressable key={sub.task.id} onPress={()=>router.push({pathname:'/edit',params:{id:String(sub.task.id)}})} style={s.subRow}>
+        <Pressable accessibilityRole="checkbox" accessibilityLabel={sub.completed?'Marcar subtarefa como pendente':'Concluir subtarefa'} accessibilityState={{checked:sub.completed,disabled:locked}} disabled={locked} hitSlop={8} onPress={()=>toggle(entry,sub)} style={[s.check,s.subCheck,sub.completed&&s.checked,locked&&{opacity:0.45}]}>
+          <Text style={[s.checkText,{fontSize:12}]}>{sub.completed?'✓':''}</Text>
+        </Pressable>
+        <View style={{flex:1,minWidth:0}}>
+          <TaskTitle key={`${sub.task.id}-${sub.completed}`} title={sub.task.title} completed={sub.completed} colors={c} numberOfLines={2} style={{fontSize:14,fontWeight:'600',letterSpacing:0}}/>
+        </View>
+      </Pressable>)}
+      </View>;
     })}
   </View>;
 }
@@ -176,4 +188,6 @@ const createStyles=(c:ThemeColors)=>StyleSheet.create({
   title:{color:c.text,fontSize:16,fontWeight:'700'},
   meta:{color:c.muted,fontSize:12,marginTop:4},
   priority:{width:26,height:5,borderRadius:3},
+  subRow:{flexDirection:'row',alignItems:'center',gap:11,marginLeft:11,paddingLeft:24,paddingVertical:7,borderLeftWidth:2,borderLeftColor:c.accentSoft},
+  subCheck:{width:20,height:20,borderRadius:5},
 });

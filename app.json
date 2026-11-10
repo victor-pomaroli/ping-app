@@ -2,12 +2,13 @@
   "expo": {
     "name": "Ping",
     "slug": "ping",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "scheme": "ping",
     "icon": "./assets/icon.png",
     "plugins": [
       "expo-router",
       "expo-sqlite",
+      "./plugins/with-ping-faces",
       [
         "expo-notifications",
         {
@@ -37,7 +38,7 @@
     ],
     "android": {
       "package": "com.example.ping",
-      "versionCode": 10300,
+      "versionCode": 10400,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0B0C0B"
