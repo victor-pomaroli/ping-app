@@ -1,5 +1,5 @@
 diff --git a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
-index 769b552..36eb974 100644
+index 769b552..4b7c995 100644
 --- a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
 +++ b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
 @@ -2,6 +2,7 @@ package expo.modules.notifications.notifications.presentation.builders
@@ -55,7 +55,7 @@ index 769b552..36eb974 100644
        val bitmap = notificationContent.getImage(context)
        bitmap?.let { builder.setLargeIcon(it) }
      } else {
-@@ -161,6 +175,74 @@ open class ExpoNotificationBuilder(
+@@ -161,6 +175,90 @@ open class ExpoNotificationBuilder(
      return builder.build()
    }
  
@@ -70,43 +70,59 @@ index 769b552..36eb974 100644
 +    return id
 +  }
 +
++  // SystemUI draws a conversation with the shortcut's icon as avatar and the shortcut's label as
++  // title (ConversationNotificationProcessor). So each task gets its own hidden shortcut whose label
++  // is the notification title and whose icon is the bell face for this delay.
 +  private fun applyPingConversation(builder: NotificationCompat.Builder, content: INotificationContent, face: Bitmap) {
 +    try {
++      val faceIcon = IconCompat.createWithBitmap(face)
 +      val ping = Person.Builder()
 +        .setKey(PING_PERSON_KEY)
 +        .setName("Ping")
-+        .setIcon(IconCompat.createWithBitmap(face))
++        .setIcon(faceIcon)
 +        .setImportant(true)
 +        .build()
 +      val user = Person.Builder().setKey("ping-user").setName("Você").build()
++      val title = content.title?.toString()?.takeIf { it.isNotBlank() } ?: "Ping"
 +      val style = NotificationCompat.MessagingStyle(user)
-+        .setConversationTitle(content.title)
-+        .setGroupConversation(true)
++        .setConversationTitle(title)
++        .setGroupConversation(false)
 +        .addMessage(content.text ?: "", System.currentTimeMillis(), ping)
 +      builder.setStyle(style)
 +      builder.addPerson(ping)
-+      if (ensurePingShortcut()) {
-+        builder.setShortcutId(PING_SHORTCUT_ID)
++      val shortcutId = pingShortcutId(content)
++      if (pushPingShortcut(shortcutId, title, faceIcon)) {
++        builder.setShortcutId(shortcutId)
 +      }
 +    } catch (e: Exception) {
 +      Log.w("expo-notifications", "Could not apply Ping conversation style: ${e.message}")
 +    }
 +  }
 +
-+  // Android 11+ only treats MessagingStyle as a conversation (avatar on the left) when it points
-+  // to a long-lived shortcut. One shared shortcut is enough: the avatar comes from each message.
-+  private fun ensurePingShortcut(): Boolean = try {
++  // One shortcut per task and face: the stages of a task don't overwrite each other's avatar,
++  // and the total stays small (Android evicts the oldest dynamic shortcuts when needed).
++  private fun pingShortcutId(content: INotificationContent): String {
++    val data = content.body
++    val face = data?.optString("largeIcon", "")?.removePrefix("ping_face_") ?: ""
++    val task = data?.optString("taskId", "")?.takeIf { it.isNotEmpty() }
++      ?: data?.optString("kind", "")?.takeIf { it.isNotEmpty() }
++      ?: "ping"
++    return "ping_${task}_$face".take(64)
++  }
++
++  private fun pushPingShortcut(id: String, label: String, icon: IconCompat): Boolean = try {
 +    val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
 +    if (launch == null) {
 +      false
 +    } else {
 +      launch.action = Intent.ACTION_MAIN
-+      val shortcut = ShortcutInfoCompat.Builder(context, PING_SHORTCUT_ID)
-+        .setShortLabel("Ping")
++      val shortcut = ShortcutInfoCompat.Builder(context, id)
++        .setShortLabel(label.take(40))
 +        .setLongLived(true)
 +        .setPerson(Person.Builder().setKey(PING_PERSON_KEY).setName("Ping").build())
-+        .setIcon(IconCompat.createWithResource(context, context.applicationInfo.icon))
++        .setIcon(icon)
 +        .setIntent(launch)
++        .setExcludedFromSurfaces(ShortcutInfoCompat.SURFACE_LAUNCHER)
 +        .build()
 +      ShortcutManagerCompat.pushDynamicShortcut(context, shortcut)
 +      true
@@ -130,11 +146,10 @@ index 769b552..36eb974 100644
    private fun applySoundsAndVibrations(content: INotificationContent, builder: NotificationCompat.Builder) {
      val shouldPlaySound = shouldPlaySound()
      val shouldVibrate = shouldVibrate()
-@@ -390,6 +472,8 @@ open class ExpoNotificationBuilder(
+@@ -390,6 +488,7 @@ open class ExpoNotificationBuilder(
        "expo.modules.notifications.default_notification_color"
      const val EXTRAS_MARSHALLED_NOTIFICATION_REQUEST_KEY: String = "expo.notification_request"
      const val EXTRAS_BODY_KEY = "body"
-+    private const val PING_SHORTCUT_ID = "ping_conversation"
 +    private const val PING_PERSON_KEY = "ping"
  
      @JvmStatic

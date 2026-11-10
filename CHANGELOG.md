@@ -21,6 +21,11 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.4.4] — 2026-11-10
+
+### Corrigido
+- Na conversa do Ping, a foto aparecia como o ícone do app (duplicado com o selo do canto) e o título virava "Ping". Agora cada tarefa tem seu próprio atalho de conversa, escondido do menu do ícone, com o nome da tarefa e o rosto do momento: a foto já aparece com a notificação recolhida e o título volta a ser a tarefa.
+
 ## [1.4.3] — 2026-11-10
 
 ### Corrigido
