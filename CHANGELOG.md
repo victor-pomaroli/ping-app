@@ -21,6 +21,11 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.4.2] — 2026-11-10
+
+### Alterado
+- Os avisos com rosto agora chegam como uma conversa enviada pelo **Ping**: o rosto do momento aparece como foto à esquerda (com o ícone do app no canto), o título continua sendo a tarefa e a mensagem vem como "Ping: …". Assim o rosto aparece também em aparelhos Samsung (One UI), que trocam o ícone da notificação pelo ícone do app. Os avisos podem aparecer na seção "Conversas" da cortina.
+
 ## [1.4.1] — 2026-11-10
 
 ### Corrigido

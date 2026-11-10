@@ -1,8 +1,27 @@
 diff --git a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
-index 769b552..43fd25c 100644
+index 769b552..ab588bc 100644
 --- a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
 +++ b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
-@@ -92,7 +92,8 @@ open class ExpoNotificationBuilder(
+@@ -2,6 +2,7 @@ package expo.modules.notifications.notifications.presentation.builders
+ 
+ import android.app.Notification
+ import android.content.Context
++import android.content.Intent
+ import android.content.pm.PackageManager
+ import android.graphics.Bitmap
+ import android.graphics.BitmapFactory
+@@ -11,6 +12,10 @@ import android.os.Parcel
+ import android.provider.Settings
+ import android.util.Log
+ import androidx.core.app.NotificationCompat
++import androidx.core.app.Person
++import androidx.core.content.pm.ShortcutInfoCompat
++import androidx.core.content.pm.ShortcutManagerCompat
++import androidx.core.graphics.drawable.IconCompat
+ import androidx.core.app.RemoteInput
+ import expo.modules.notifications.notifications.SoundResolver
+ import expo.modules.notifications.notifications.enums.NotificationPriority
+@@ -92,7 +97,8 @@ open class ExpoNotificationBuilder(
    override suspend fun build(): Notification {
      val builder = createBuilder()
  
@@ -12,13 +31,24 @@ index 769b552..43fd25c 100644
      builder.setPriority(priority)
  
      val content = notificationContent
-@@ -156,11 +157,34 @@ open class ExpoNotificationBuilder(
+@@ -107,6 +113,10 @@ open class ExpoNotificationBuilder(
+     // Sets the text/contentText as the bigText to allow the notification to be expanded and the
+     // entire text to be viewed.
+     builder.setStyle(NotificationCompat.BigTextStyle().bigText(content.text))
++    // Ping: with a bell face, the notification becomes a conversation sent by "Ping", so launchers
++    // that replace the small icon with the app icon (Samsung One UI) still show the face as avatar.
++    val pingFace = if (content.containsImage()) null else largeIconFromData(content.body)
++    pingFace?.let { applyPingConversation(builder, content, it) }
+ 
+     color?.let { builder.color = it.toInt() }
+     notificationContent.badgeCount?.toInt()?.let { builder.setNumber(it) }
+@@ -156,11 +166,80 @@ open class ExpoNotificationBuilder(
        val bitmap = notificationContent.getImage(context)
        bitmap?.let { builder.setLargeIcon(it) }
      } else {
 -      builder.setLargeIcon(largeIcon)
 +      // Ping: data.largeIcon names a bundled drawable (the bell face for this delay).
-+      builder.setLargeIcon(largeIconFromData(notificationContent.body) ?: largeIcon)
++      builder.setLargeIcon(pingFace ?: largeIcon)
      }
      return builder.build()
    }
@@ -32,6 +62,52 @@ index 769b552..43fd25c 100644
 +      return null
 +    }
 +    return id
++  }
++
++  private fun applyPingConversation(builder: NotificationCompat.Builder, content: INotificationContent, face: Bitmap) {
++    try {
++      val ping = Person.Builder()
++        .setKey(PING_PERSON_KEY)
++        .setName("Ping")
++        .setIcon(IconCompat.createWithBitmap(face))
++        .setImportant(true)
++        .build()
++      val user = Person.Builder().setKey("ping-user").setName("Você").build()
++      val style = NotificationCompat.MessagingStyle(user)
++        .setConversationTitle(content.title)
++        .setGroupConversation(true)
++        .addMessage(content.text ?: "", System.currentTimeMillis(), ping)
++      builder.setStyle(style)
++      builder.addPerson(ping)
++      if (ensurePingShortcut()) {
++        builder.setShortcutId(PING_SHORTCUT_ID)
++      }
++    } catch (e: Exception) {
++      Log.w("expo-notifications", "Could not apply Ping conversation style: ${e.message}")
++    }
++  }
++
++  // Android 11+ only treats MessagingStyle as a conversation (avatar on the left) when it points
++  // to a long-lived shortcut. One shared shortcut is enough: the avatar comes from each message.
++  private fun ensurePingShortcut(): Boolean = try {
++    val launch = context.packageManager.getLaunchIntentForPackage(context.packageName)
++    if (launch == null) {
++      false
++    } else {
++      launch.action = Intent.ACTION_MAIN
++      val shortcut = ShortcutInfoCompat.Builder(context, PING_SHORTCUT_ID)
++        .setShortLabel("Ping")
++        .setLongLived(true)
++        .setPerson(Person.Builder().setKey(PING_PERSON_KEY).setName("Ping").build())
++        .setIcon(IconCompat.createWithResource(context, context.applicationInfo.icon))
++        .setIntent(launch)
++        .build()
++      ShortcutManagerCompat.pushDynamicShortcut(context, shortcut)
++      true
++    }
++  } catch (e: Exception) {
++    Log.w("expo-notifications", "Could not publish Ping conversation shortcut: ${e.message}")
++    false
 +  }
 +
 +  private fun largeIconFromData(data: org.json.JSONObject?): Bitmap? {
@@ -48,3 +124,12 @@ index 769b552..43fd25c 100644
    private fun applySoundsAndVibrations(content: INotificationContent, builder: NotificationCompat.Builder) {
      val shouldPlaySound = shouldPlaySound()
      val shouldVibrate = shouldVibrate()
+@@ -390,6 +469,8 @@ open class ExpoNotificationBuilder(
+       "expo.modules.notifications.default_notification_color"
+     const val EXTRAS_MARSHALLED_NOTIFICATION_REQUEST_KEY: String = "expo.notification_request"
+     const val EXTRAS_BODY_KEY = "body"
++    private const val PING_SHORTCUT_ID = "ping_conversation"
++    private const val PING_PERSON_KEY = "ping"
+ 
+     @JvmStatic
+     fun largeIconFromManifest(context: Context): Bitmap? {
