@@ -322,7 +322,7 @@ export async function deleteTask(id:number,parentGoing=false){
   if(parent)await replaceReminders(parent.id,parent,!!parent.completed).catch(console.warn);
   await refreshWidget();
 }
-const REMINDER_CONTENT_VERSION='2-faces';
+const REMINDER_CONTENT_VERSION='3-icons';
 export async function reconcileReminders(){
   await syncDailyTasks();
   const db=await ready;

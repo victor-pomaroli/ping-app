@@ -63,7 +63,7 @@ async function buildContent(task:ReminderTask,stage:ReminderStage,variant:number
   return {
     title:prefs.privatePreviews?'Ping · lembrete':task.title,
     body:prefs.privatePreviews?'Você tem uma tarefa esperando. Abra o Ping para conferir.':reminderMessage(task.category,stage,variant,prefs.displayName,prefs.addressStyle,prefs.personality)+subtaskLine(task),
-    data:{kind:'task_due',taskId:task.id,stage,...(face?{largeIcon:face.largeIcon}:{})},
+    data:{kind:'task_due',taskId:task.id,stage,...(face?{largeIcon:face.largeIcon,smallIcon:face.smallIcon}:{})},
     categoryIdentifier:TASK_CATEGORY,
     ...(face&&Platform.OS==='android'?{color:face.color}:{}),
   };
@@ -91,7 +91,7 @@ export async function scheduleTaskReminders(task:ReminderTask):Promise<Scheduled
       const minute=hour===7 && (when.getHours()>=22||when.getHours()<7)?0:when.getMinutes();
       const face=notificationFace(prefs.personality,'no_horario',task.category);
       const id=await Notifications.scheduleNotificationAsync({
-        content:{title:prefs.privatePreviews?'Ping · lembrete':task.title,body:prefs.privatePreviews?'Você tem uma tarefa esperando. Abra o Ping para conferir.':'Sua rotina diária está te esperando no Ping.',data:{kind:'task_due',taskId:task.id,daily:true,...(face?{largeIcon:face.largeIcon}:{})},...(face&&Platform.OS==='android'?{color:face.color}:{})},
+        content:{title:prefs.privatePreviews?'Ping · lembrete':task.title,body:prefs.privatePreviews?'Você tem uma tarefa esperando. Abra o Ping para conferir.':'Sua rotina diária está te esperando no Ping.',data:{kind:'task_due',taskId:task.id,daily:true,...(face?{largeIcon:face.largeIcon,smallIcon:face.smallIcon}:{})},...(face&&Platform.OS==='android'?{color:face.color}:{})},
         trigger:{type:Notifications.SchedulableTriggerInputTypes.DAILY,hour,minute,...(Platform.OS==='android'?{channelId:CHANNEL}:{})},
       });
       return [{notification_id:id,stage:0,scheduled_at:Date.now()}];

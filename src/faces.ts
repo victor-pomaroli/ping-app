@@ -21,10 +21,14 @@ const COLORS:Record<NotificationPersonality,Record<FaceMoment,string>>={
 export function faceMoment(stage:number):FaceMoment{
   return stage>=3?'atraso_3h':stage===2?'atraso_1h':'no_horario';
 }
-/** Nome do recurso Android e cor do aviso. Saúde não ganha rosto: o tom ali é sempre neutro. */
+/**
+ * Recursos Android e cor do aviso. `largeIcon` é o rosto colorido da personalidade; `smallIcon` é a
+ * silhueta da barra de status, que muda só com o atraso (sorrindo → sério → exclamação).
+ * Saúde não ganha rosto: o tom ali é sempre neutro e usa o ícone padrão.
+ */
 export function notificationFace(personality:NotificationPersonality,moment:FaceMoment,category?:TaskCategory){
   if(category==='health')return null;
-  return {largeIcon:`ping_face_${PREFIX[personality]}_${moment}`,color:COLORS[personality][moment]};
+  return {largeIcon:`ping_face_${PREFIX[personality]}_${moment}`,smallIcon:`ping_notif_${moment}`,color:COLORS[personality][moment]};
 }
 
 /** As mesmas imagens para mostrar dentro do app (Ajustes, onboarding). */

@@ -25,6 +25,7 @@ _Nada ainda._
 
 ### Adicionado
 - **Rostos do Ping**: o sino da notificação muda de expressão conforme o atraso (no horário, +1 h, +3 h), em cada personalidade, e a cor do aviso acompanha. Saúde e eventos seguem com o ícone padrão. Os rostos também aparecem na escolha de personalidade em Ajustes.
+- Novo ícone de notificação no estilo do logo (sino inclinado com raios). O ícone da barra de status muda com o atraso: sorrindo no horário, sério com 1 h e com exclamação com 3 h.
 - Subtarefas na aba Calendário, logo abaixo da tarefa principal, com caixa de concluir e progresso (ex.: `2/3 subtarefas`).
 - O aviso da tarefa principal diz quantas subtarefas faltam.
 

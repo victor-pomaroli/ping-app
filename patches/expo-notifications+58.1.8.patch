@@ -1,8 +1,18 @@
 diff --git a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
-index 769b552..49b12a5 100644
+index 769b552..43fd25c 100644
 --- a/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
 +++ b/node_modules/expo-notifications/android/src/main/java/expo/modules/notifications/notifications/presentation/builders/ExpoNotificationBuilder.kt
-@@ -156,11 +156,28 @@ open class ExpoNotificationBuilder(
+@@ -92,7 +92,8 @@ open class ExpoNotificationBuilder(
+   override suspend fun build(): Notification {
+     val builder = createBuilder()
+ 
+-    builder.setSmallIcon(icon)
++    // Ping: data.smallIcon names a bundled silhouette that changes with the delay.
++    builder.setSmallIcon(drawableIdFromData(notificationContent.body, "smallIcon", "ping_notif_") ?: icon)
+     builder.setPriority(priority)
+ 
+     val content = notificationContent
+@@ -156,11 +157,34 @@ open class ExpoNotificationBuilder(
        val bitmap = notificationContent.getImage(context)
        bitmap?.let { builder.setLargeIcon(it) }
      } else {
@@ -13,14 +23,20 @@ index 769b552..49b12a5 100644
      return builder.build()
    }
  
-+  private fun largeIconFromData(data: org.json.JSONObject?): Bitmap? {
-+    val name = data?.optString("largeIcon", "") ?: return null
-+    if (!name.matches(Regex("^ping_face_[a-z0-9_]+$"))) return null
++  private fun drawableIdFromData(data: org.json.JSONObject?, key: String, prefix: String): Int? {
++    val name = data?.optString(key, "") ?: return null
++    if (!name.startsWith(prefix) || !name.matches(Regex("^[a-z0-9_]+$"))) return null
 +    val id = context.resources.getIdentifier(name, "drawable", context.packageName)
 +    if (id == 0) {
-+      Log.w("expo-notifications", "Large icon \"$name\" not found in drawables")
++      Log.w("expo-notifications", "Drawable \"$name\" ($key) not found")
 +      return null
 +    }
++    return id
++  }
++
++  private fun largeIconFromData(data: org.json.JSONObject?): Bitmap? {
++    val id = drawableIdFromData(data, "largeIcon", "ping_face_") ?: return null
++    val name = context.resources.getResourceEntryName(id)
 +    return try {
 +      BitmapFactory.decodeResource(context.resources, id)
 +    } catch (e: Exception) {
