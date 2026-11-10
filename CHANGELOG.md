@@ -21,6 +21,11 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.4.1] — 2026-11-10
+
+### Corrigido
+- O teste de notificação em Ajustes agora usa os rostos do Ping: três avisos seguidos (10, 20 e 30 s) mostram o rosto e a mensagem de cada momento da personalidade escolhida (no horário, 1 h e 3 h de atraso). Antes o teste saía sem rosto.
+
 ## [1.4.0] — 2026-11-09
 
 ### Adicionado

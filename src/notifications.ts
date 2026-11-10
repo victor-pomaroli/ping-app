@@ -192,6 +192,10 @@ export async function cancelOrphanNotifications(loadKnown:()=>Promise<Set<string
   await cancelTaskReminders(orphans);
   return orphans.length;
 }
+/**
+ * Teste em Ajustes: três avisos seguidos (10, 20 e 30 s) com o rosto e a mensagem de cada momento
+ * da personalidade escolhida — no horário, +1 h e +3 h — para conferir os rostos no aparelho.
+ */
 export async function testNotification(){
   const permission=await Notifications.getPermissionsAsync();
   if(!permission.granted)throw new Error('Permissão de notificações não concedida.');
@@ -199,8 +203,24 @@ export async function testNotification(){
   // Um teste por vez: tocar várias vezes no botão não empilha avisos.
   const previous=(await Notifications.getAllScheduledNotificationsAsync()).filter(n=>n.content.data?.kind==='test').map(n=>n.identifier);
   await cancelTaskReminders(previous);
-  return Notifications.scheduleNotificationAsync({
-    content:{title:prefs.privatePreviews?'Ping - lembrete':'Teste do Ping!',body:prefs.privatePreviews?'Abra o Ping para conferir seu lembrete.':reminderMessage('general',0,0,prefs.displayName,prefs.addressStyle,prefs.personality),data:{kind:'test'}},
-    trigger:dateTrigger(Date.now()+10000),
-  });
+  const steps:{stage:ReminderStage;moment:FaceMoment;label:string}[]=[
+    {stage:0,moment:'no_horario',label:'no horário'},
+    {stage:2,moment:'atraso_1h',label:'1 h de atraso'},
+    {stage:3,moment:'atraso_3h',label:'3 h de atraso'},
+  ];
+  const ids:string[]=[];
+  for(let i=0;i<steps.length;i++){
+    const {stage,moment,label}=steps[i];
+    const face=notificationFace(prefs.personality,moment);
+    ids.push(await Notifications.scheduleNotificationAsync({
+      content:{
+        title:prefs.privatePreviews?'Ping - lembrete':`Teste do Ping · ${label}`,
+        body:prefs.privatePreviews?'Abra o Ping para conferir seu lembrete.':reminderMessage('general',stage,0,prefs.displayName,prefs.addressStyle,prefs.personality),
+        data:{kind:'test',...(face?{largeIcon:face.largeIcon,smallIcon:face.smallIcon}:{})},
+        ...(face&&Platform.OS==='android'?{color:face.color}:{}),
+      },
+      trigger:dateTrigger(Date.now()+10000*(i+1)),
+    }));
+  }
+  return ids;
 }

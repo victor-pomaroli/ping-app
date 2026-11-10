@@ -56,7 +56,7 @@ export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
  async function sendTest(){
    if(testing)return;
    setTesting(true);
-   try{await testNotification();showDialog({eyebrow:'PING / RECADO',title:'Teste agendado',message:'O Ping programou uma notificação para daqui a 10 segundos. Bloqueie a tela ou feche o app para verificar.'});}
+   try{await testNotification();showDialog({eyebrow:'PING / RECADO',title:'Teste agendado',message:'O Ping vai mandar três avisos, aos 10, 20 e 30 segundos, com o rosto de cada momento: no horário, 1 h e 3 h de atraso. Bloqueie a tela ou feche o app para ver.'});}
    catch(e){showError('Teste não agendado',e);}
    finally{setTesting(false);}
  }
@@ -161,7 +161,7 @@ export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
      <View style={s.separator}/>
      <Pressable accessibilityRole="button" style={s.row} onPress={checkScheduled}><View style={s.copy}><Text style={s.title}>Lembretes programados ↻</Text><Text style={s.detail}>{scheduledCount===null?'Toque para consultar':scheduledCount+' notificações de tarefas aguardando disparo. Toque para atualizar.'}</Text></View></Pressable>
      <View style={s.separator}/>
-     <Pressable accessibilityRole="button" disabled={testing} style={s.row} onPress={sendTest}><View style={s.copy}><Text style={s.title}>Testar notificação em 10 segundos</Text><Text style={s.detail}>Agenda um aviso de teste para verificar a entrega pelo Android, inclusive com o aplicativo fechado.</Text></View></Pressable>
+     <Pressable accessibilityRole="button" disabled={testing} style={s.row} onPress={sendTest}><View style={s.copy}><Text style={s.title}>Testar notificações com os rostos</Text><Text style={s.detail}>Três avisos em 30 segundos, um para cada rosto da sua personalidade. Funciona com o app fechado.</Text></View></Pressable>
      <View style={s.separator}/>
      <Pressable style={s.row} onPress={()=>Linking.openSettings().catch(e=>showError('Erro',e))}><View style={s.copy}><Text style={s.title}>Permissões do Android ↗</Text><Text style={s.detail}>Status: {permission}. Ajuste sons, alertas e permissões nas configurações do aparelho.</Text></View></Pressable>
    </View>
