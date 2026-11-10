@@ -33,5 +33,14 @@
     "@types/react": "*",
     "patch-package": "^8.0.1",
     "typescript": "~6.0.3"
+  },
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": [
+          "expo-notifications"
+        ]
+      }
+    }
   }
 }
