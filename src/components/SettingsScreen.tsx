@@ -1,10 +1,11 @@
 import React,{useEffect,useState} from 'react';
-import {View,Text,Switch,Pressable,StyleSheet,Linking,TextInput} from 'react-native';
+import {View,Text,Switch,Pressable,StyleSheet,Linking,TextInput,Image} from 'react-native';
 import {showDialog,showError} from './PingDialog';
 import * as Notifications from 'expo-notifications';
 import {getPreferences,setPreference,Preferences,AddressStyle,NotificationPersonality} from '../preferences';
 import {rescheduleAllReminders,deleteAllTasks} from '../store';
 import {testNotification} from '../notifications';
+import {FACE_IMAGES,FaceMoment} from '../faces';
 import {useAppTheme,ThemeColors,Appearance,palettes,appearances,appearanceNames} from '../theme';
 
 export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
@@ -141,6 +142,13 @@ export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
       return <Pressable key={key} accessibilityRole="radio" accessibilityState={{checked:selected}} disabled={busy} onPress={()=>choosePersonality(key)} style={[s.personalityOption,{borderColor:selected?c.accent:c.border,backgroundColor:c.surface}]}>
         <View style={s.personalityHeading}><Text style={[s.title,{flex:1}]}>{label}</Text><Text style={{color:c.accent,fontWeight:'900'}}>{selected?'✓ ATIVO':'○'}</Text></View>
         <Text style={s.detail}>{description}</Text>
+        {/* Como o sino reage conforme o atraso: no horário, +1 h e +3 h. */}
+        <View style={s.faceRow} accessible accessibilityLabel={`Rostos do Ping ${label}: no horário, uma hora e três horas de atraso`}>
+          {(['no_horario','atraso_1h','atraso_3h'] as FaceMoment[]).map((moment,i)=><View key={moment} style={s.faceCell}>
+            <Image source={FACE_IMAGES[key][moment]} style={s.faceImage}/>
+            <Text style={{color:c.muted,fontSize:10,fontWeight:'800',letterSpacing:0.6}}>{['NA HORA','+1 H','+3 H'][i]}</Text>
+          </View>)}
+        </View>
         <View style={[s.personalityPreview,{backgroundColor:c.background,borderColor:c.border}]}><Text style={{color:c.muted,fontSize:11,lineHeight:17}}>{preview}</Text></View>
       </Pressable>;
     })}
@@ -171,6 +179,9 @@ const createStyles=(c:ThemeColors)=>StyleSheet.create({
  personalityList:{gap:10,marginTop:13},
  personalityOption:{borderWidth:1.5,borderRadius:12,padding:14},
  personalityHeading:{flexDirection:'row',alignItems:'center'},
+ faceRow:{flexDirection:'row',gap:10,marginTop:12},
+ faceCell:{alignItems:'center',gap:4},
+ faceImage:{width:56,height:56,borderRadius:12},
  personalityPreview:{marginTop:10,padding:11,borderWidth:1,borderRadius:8},
  nameInput:{borderWidth:1,borderRadius:9,paddingHorizontal:12,paddingVertical:12,marginTop:7},
  saveButton:{alignItems:'center',padding:13,borderRadius:9,marginTop:10},

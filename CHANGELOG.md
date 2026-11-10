@@ -21,6 +21,25 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.4.0] — 2026-11-09
+
+### Adicionado
+- **Rostos do Ping**: o sino da notificação muda de expressão conforme o atraso (no horário, +1 h, +3 h), em cada personalidade, e a cor do aviso acompanha. Saúde e eventos seguem com o ícone padrão. Os rostos também aparecem na escolha de personalidade em Ajustes.
+- Novo ícone do app: o logo do Ping (sino sorridente, checklist e "ping.") sobre fundo verde, ajustado para as máscaras do Android.
+- Novo ícone de notificação tirado do sino do logo. O ícone da barra de status muda com o atraso: sorrindo no horário, sério com 1 h e com exclamação com 3 h.
+- Subtarefas na aba Calendário, logo abaixo da tarefa principal, com caixa de concluir e progresso (ex.: `2/3 subtarefas`).
+- O aviso da tarefa principal diz quantas subtarefas faltam.
+
+### Alterado
+- Concluir todas as subtarefas conclui a tarefa principal; reabrir uma subtarefa reabre a principal e reagenda os avisos.
+- Subtarefas não mostram mais horário próprio na edição: os avisos vêm da tarefa principal.
+- Na primeira abertura após atualizar, todos os lembretes são reagendados uma vez para ganhar os rostos.
+
+### Corrigido
+- Lembretes órfãos (ex.: um "Teste" antigo que continuava chegando) são cancelados ao abrir o app.
+- O botão de testar notificação não empilha vários testes.
+- Apagar uma tarefa principal não reagenda mais os avisos dela pelas subtarefas.
+
 ## [1.3.0] — 2026-11-05
 
 ### Adicionado

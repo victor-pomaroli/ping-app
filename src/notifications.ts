@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import {Platform} from 'react-native';
 import {getPreferences} from './preferences';
+import {faceMoment,notificationFace,FaceMoment} from './faces';
 import {reminderMessage,reminderOffsets,TaskCategory,ReminderStage,eventReminderMessage,privateEventMessage} from './templates';
 
 Notifications.setNotificationHandler({
@@ -22,7 +23,8 @@ const EVENT_STAGE_BASE=20;
 /** Etapa usada para lembretes adiados pelo botão "Adiar". */
 export const SNOOZE_STAGE=9;
 export type ScheduledReminder={notification_id:string;stage:number;scheduled_at:number};
-export type ReminderTask={id:number;title:string;due_at:number;category:TaskCategory;daily?:boolean};
+/** `subtasks`: quantas subtarefas faltam, para o aviso da principal dizer isso. */
+export type ReminderTask={id:number;title:string;due_at:number;category:TaskCategory;daily?:boolean;subtasks?:{pending:number;total:number}};
 export type EventReminder={id:number;title:string;due_at:number;category:TaskCategory;location:string;offsets:number[]};
 
 /** Cria canal e botões de ação. Não pede permissão: isso acontece após o onboarding. */
@@ -47,13 +49,23 @@ export async function ensureNotificationPermission(){
   return (await Notifications.requestPermissionsAsync()).granted;
 }
 
-async function buildContent(task:ReminderTask,stage:ReminderStage,variant:number):Promise<Notifications.NotificationContentInput>{
+function subtaskLine(task:ReminderTask){
+  const sub=task.subtasks;
+  if(!sub||!sub.total||!sub.pending)return '';
+  return sub.pending===1?`
+Falta 1 de ${sub.total} subtarefas.`:`
+Faltam ${sub.pending} de ${sub.total} subtarefas.`;
+}
+async function buildContent(task:ReminderTask,stage:ReminderStage,variant:number,moment:FaceMoment=faceMoment(stage)):Promise<Notifications.NotificationContentInput>{
   const prefs=await getPreferences();
+  // O rosto do sino não revela a tarefa, então aparece também com a prévia privada.
+  const face=notificationFace(prefs.personality,moment,task.category);
   return {
     title:prefs.privatePreviews?'Ping · lembrete':task.title,
-    body:prefs.privatePreviews?'Você tem uma tarefa esperando. Abra o Ping para conferir.':reminderMessage(task.category,stage,variant,prefs.displayName,prefs.addressStyle,prefs.personality),
-    data:{kind:'task_due',taskId:task.id,stage},
+    body:prefs.privatePreviews?'Você tem uma tarefa esperando. Abra o Ping para conferir.':reminderMessage(task.category,stage,variant,prefs.displayName,prefs.addressStyle,prefs.personality)+subtaskLine(task),
+    data:{kind:'task_due',taskId:task.id,stage,...(face?{largeIcon:face.largeIcon,smallIcon:face.smallIcon}:{})},
     categoryIdentifier:TASK_CATEGORY,
+    ...(face&&Platform.OS==='android'?{color:face.color}:{}),
   };
 }
 /**
@@ -77,8 +89,9 @@ export async function scheduleTaskReminders(task:ReminderTask):Promise<Scheduled
       const when=new Date(task.due_at);
       const hour=when.getHours()>=22||when.getHours()<7?7:when.getHours();
       const minute=hour===7 && (when.getHours()>=22||when.getHours()<7)?0:when.getMinutes();
+      const face=notificationFace(prefs.personality,'no_horario',task.category);
       const id=await Notifications.scheduleNotificationAsync({
-        content:{title:prefs.privatePreviews?'Ping · lembrete':task.title,body:prefs.privatePreviews?'Você tem uma tarefa esperando. Abra o Ping para conferir.':'Sua rotina diária está te esperando no Ping.',data:{kind:'task_due',taskId:task.id,daily:true}},
+        content:{title:prefs.privatePreviews?'Ping · lembrete':task.title,body:prefs.privatePreviews?'Você tem uma tarefa esperando. Abra o Ping para conferir.':'Sua rotina diária está te esperando no Ping.',data:{kind:'task_due',taskId:task.id,daily:true,...(face?{largeIcon:face.largeIcon,smallIcon:face.smallIcon}:{})},...(face&&Platform.OS==='android'?{color:face.color}:{})},
         trigger:{type:Notifications.SchedulableTriggerInputTypes.DAILY,hour,minute,...(Platform.OS==='android'?{channelId:CHANNEL}:{})},
       });
       return [{notification_id:id,stage:0,scheduled_at:Date.now()}];
@@ -146,8 +159,8 @@ export async function scheduleSnoozeReminder(task:ReminderTask):Promise<Schedule
   const prefs=await getPreferences();
   if(!prefs.notifications)return null;
   const at=Date.now()+SNOOZE_MINUTES*60000;
-  // Etapa 1 = mensagens de "ainda está pendente", adequadas para um adiamento.
-  const id=await Notifications.scheduleNotificationAsync({content:await buildContent(task,1,task.id+1),trigger:dateTrigger(at)});
+  // Etapa 1 = mensagens de "ainda está pendente", adequadas para um adiamento; o rosto já é de atraso.
+  const id=await Notifications.scheduleNotificationAsync({content:await buildContent(task,1,task.id+1,'atraso_1h'),trigger:dateTrigger(at)});
   return {notification_id:id,stage:SNOOZE_STAGE,scheduled_at:at};
 }
 export async function cancelTaskReminders(ids:string[]){
@@ -165,10 +178,27 @@ export async function dismissTaskNotifications(taskId:number){
 export async function dismissAllTaskNotifications(){
   await Notifications.dismissAllNotificationsAsync().catch(console.warn);
 }
+/**
+ * Cancela agendamentos que nenhuma tarefa do banco conhece (ex.: lembretes de versões antigas
+ * ou de tarefas apagadas). Sem isso, um gatilho diário órfão dispara para sempre.
+ * Testes pendentes são mantidos: duram só 10 segundos.
+ */
+export async function cancelOrphanNotifications(loadKnown:()=>Promise<Set<string>>){
+  // Lê os agendamentos antes do banco: um lembrete criado no meio do caminho não vira "órfão".
+  const pending=await Notifications.getAllScheduledNotificationsAsync();
+  const known=await loadKnown();
+  const orphans=pending.filter(n=>!known.has(n.identifier)&&n.content.data?.kind!=='test').map(n=>n.identifier);
+  if(orphans.length)console.warn('[notifications] cancelling orphan schedules',orphans.length);
+  await cancelTaskReminders(orphans);
+  return orphans.length;
+}
 export async function testNotification(){
   const permission=await Notifications.getPermissionsAsync();
   if(!permission.granted)throw new Error('Permissão de notificações não concedida.');
   const prefs=await getPreferences();
+  // Um teste por vez: tocar várias vezes no botão não empilha avisos.
+  const previous=(await Notifications.getAllScheduledNotificationsAsync()).filter(n=>n.content.data?.kind==='test').map(n=>n.identifier);
+  await cancelTaskReminders(previous);
   return Notifications.scheduleNotificationAsync({
     content:{title:prefs.privatePreviews?'Ping - lembrete':'Teste do Ping!',body:prefs.privatePreviews?'Abra o Ping para conferir seu lembrete.':reminderMessage('general',0,0,prefs.displayName,prefs.addressStyle,prefs.personality),data:{kind:'test'}},
     trigger:dateTrigger(Date.now()+10000),

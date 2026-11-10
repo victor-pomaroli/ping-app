@@ -1,8 +1,8 @@
 import * as SQLite from 'expo-sqlite';
-import {getPreferences} from './preferences';
+import {getPreferences,getMeta,setMeta} from './preferences';
 import {reminderOffsets} from './templates';
 import {TaskCategory} from './templates';
-import {SNOOZE_STAGE,cancelTaskReminders,scheduleTaskReminders,scheduleSnoozeReminder,scheduleEventAlerts,scheduleEventSnooze,dismissTaskNotifications,dismissAllTaskNotifications,ScheduledReminder} from './notifications';
+import {SNOOZE_STAGE,cancelOrphanNotifications,cancelTaskReminders,scheduleTaskReminders,scheduleSnoozeReminder,scheduleEventAlerts,scheduleEventSnooze,dismissTaskNotifications,dismissAllTaskNotifications,ScheduledReminder} from './notifications';
 export type Task={id:number;title:string;description:string;due_at:number;priority:'low'|'medium'|'high';category:TaskCategory;completed:number;completed_at:number|null;archived_at:number|null;notification_id:string|null;parent_id:number|null;daily:number;daily_active:number;daily_day:string|null;no_due:number;kind:TaskKind;ends_at:number|null;location:string;alert_offsets:string};
 /** `kind`: 'task' (tarefa) ou 'event' (evento com hora marcada, avisado antes de acontecer). */
 export type TaskKind='task'|'event';
@@ -75,7 +75,8 @@ export async function listTaskPage(limit=50,offset=0,category?:TaskCategory,kind
 // Calendar queries: indexed timestamp ranges, root tasks only, no N+1 lookups.
 /** `total`/`completed` contam tarefas; `events` conta eventos (bolinha de outra cor). */
 export type CalendarDaySummary={day:string;total:number;completed:number;events:number};
-export type CalendarEntry={task:Task;occurrenceDay:string;completed:boolean;routine:boolean;event:boolean};
+export type CalendarSubtask={task:Task;completed:boolean};
+export type CalendarEntry={task:Task;occurrenceDay:string;completed:boolean;routine:boolean;event:boolean;subtasks:CalendarSubtask[]};
 function calendarKey(timestamp:number){return localDay(new Date(timestamp));}
 /** Resumo do mês para as bolinhas: tarefas com data e eventos. Rotinas diárias ficam de fora para as datas se destacarem. */
 export async function listCalendarMonth(start:number,end:number):Promise<CalendarDaySummary[]>{
@@ -103,10 +104,22 @@ export async function listCalendarDay(start:number,end:number):Promise<CalendarE
   const history=day<localDay()?await db.getAllAsync<{task_id:number;completed:number}>(
     'SELECT task_id,completed FROM daily_history WHERE day=?',day):[];
   const byId=new Map(history.map(x=>[x.task_id,!!x.completed]));
-  const entries:CalendarEntry[]=ordinary.map(task=>({task,occurrenceDay:day,completed:!!task.completed,routine:false,event:task.kind==='event'}));
+  const entries:CalendarEntry[]=ordinary.map(task=>({task,occurrenceDay:day,completed:!!task.completed,routine:false,event:task.kind==='event',subtasks:[]}));
   for(const task of routines){
     if(day>localDay() || day===localDay() || byId.has(task.id)){
-      entries.push({task,occurrenceDay:day,completed:day===localDay()?!!task.completed:byId.get(task.id)??false,routine:true,event:false});
+      entries.push({task,occurrenceDay:day,completed:day===localDay()?!!task.completed:byId.get(task.id)??false,routine:true,event:false,subtasks:[]});
+    }
+  }
+  // Subtarefas aparecem sob a principal. Em outros dias de uma rotina não há histórico por
+  // subtarefa: elas seguem o estado da principal naquele dia.
+  const parents=entries.filter(e=>!e.event);
+  if(parents.length){
+    const children=await db.getAllAsync<Task>(`SELECT * FROM tasks WHERE parent_id IN (${parents.map(()=>'?').join(',')}) AND archived_at IS NULL ORDER BY id ASC`,...parents.map(e=>e.task.id));
+    const byParent=new Map<number,Task[]>();
+    for(const child of children){const group=byParent.get(child.parent_id!)??[];group.push(child);byParent.set(child.parent_id!,group);}
+    for(const entry of parents){
+      const otherDay=entry.routine&&day!==localDay();
+      entry.subtasks=(byParent.get(entry.task.id)??[]).map(task=>({task,completed:otherDay?entry.completed:!!task.completed}));
     }
   }
   const minutes=(t:Task)=>{if(t.no_due)return -1;const d=new Date(t.due_at);return d.getHours()*60+d.getMinutes();};
@@ -146,13 +159,19 @@ async function replaceReminders(id:number,task:Pick<TaskInput,'title'|'due_at'|'
   if(current?.parent_id || current?.no_due || (current?.daily && !current.daily_active) || (completed && !current?.daily))return;
   const scheduled=current?.kind==='event'
     ?await scheduleEventAlerts({id,title:current.title,due_at:current.due_at,category:current.category,location:current.location,offsets:eventOffsets(current)})
-    :await scheduleTaskReminders({id,title:task.title,due_at:task.due_at,category:task.category,daily:!!current?.daily});
+    :await scheduleTaskReminders({id,title:task.title,due_at:task.due_at,category:task.category,daily:!!current?.daily,subtasks:await subtaskProgress(id)});
   try{
     for(const item of scheduled)await db.runAsync(
       'INSERT INTO task_notifications(notification_id,task_id,stage,scheduled_at) VALUES(?,?,?,?)',
       item.notification_id,id,item.stage,item.scheduled_at);
     await db.runAsync('UPDATE tasks SET notification_id=? WHERE id=?',scheduled[0]?.notification_id??null,id);
   }catch(e){await cancelTaskReminders(scheduled.map(x=>x.notification_id));throw e;}
+}
+/** Quantas subtarefas da tarefa ainda estão pendentes (para o texto do aviso da principal). */
+async function subtaskProgress(parentId:number){
+  const db=await ready;
+  const row=await db.getFirstAsync<{total:number;pending:number}>('SELECT COUNT(*) AS total,COALESCE(SUM(completed=0),0) AS pending FROM tasks WHERE parent_id=? AND archived_at IS NULL',parentId);
+  return row&&row.total?{total:row.total,pending:row.pending}:undefined;
 }
 export async function listChildren(parentId:number){const db=await ready;return db.getAllAsync<Task>('SELECT * FROM tasks WHERE parent_id=? ORDER BY id ASC',parentId);}
 export async function saveTaskGroup(task:TaskInput,children:ChildInput[],id?:number,daily=false){
@@ -195,6 +214,11 @@ export async function saveTaskGroup(task:TaskInput,children:ChildInput[],id?:num
       await db.runAsync('DELETE FROM tasks WHERE id=? AND parent_id=?',old.id,parent.id);
     }
   });
+  // Os avisos da principal citam quantas subtarefas faltam: reagenda com a lista nova.
+  if(!before?.parent_id&&task.kind!=='event'&&(clean.length||existing.length)){
+    const fresh=await getTask(parent.id);
+    if(fresh)try{await replaceReminders(fresh.id,fresh,!!fresh.completed);}catch(e){console.warn(e);return {...parent,reminderError:true};}
+  }
   await refreshWidget();
   return parent;
 }
@@ -233,10 +257,32 @@ export async function setTaskCompleted(id:number,completed:boolean){
   await db.runAsync('UPDATE tasks SET completed=?,completed_at=?,archived_at=NULL WHERE id=?',completed?1:0,completed?Date.now():null,id);
   if(task.daily)await db.runAsync('INSERT OR REPLACE INTO daily_history(task_id,day,completed) VALUES(?,?,?)',id,localDay(),completed?1:0);
   if(!task.parent_id)await db.runAsync('UPDATE tasks SET completed=?,completed_at=?,archived_at=NULL WHERE parent_id=?',completed?1:0,completed?Date.now():null,id);
+  else await syncParentCompletion(task.parent_id);
   return task;
+}
+/**
+ * Subtarefa mudou: a principal fica concluída quando todas as subtarefas estão concluídas
+ * e volta a pendente quando alguma é reaberta.
+ */
+async function syncParentCompletion(parentId:number){
+  const db=await ready;const parent=await getTask(parentId);
+  const progress=await subtaskProgress(parentId);
+  if(!parent||!progress)return;
+  const done=progress.pending===0;
+  if(done===!!parent.completed)return;
+  await db.runAsync('UPDATE tasks SET completed=?,completed_at=?,archived_at=NULL WHERE id=?',done?1:0,done?Date.now():null,parentId);
+  if(parent.daily)await db.runAsync('INSERT OR REPLACE INTO daily_history(task_id,day,completed) VALUES(?,?,?)',parentId,localDay(),done?1:0);
 }
 /** Efeitos lentos da conclusão: cancela/reagenda lembretes e limpa a bandeja. */
 export async function syncTaskCompletion(task:Task,completed:boolean){
+  if(task.parent_id){
+    // Subtarefas não têm avisos próprios: quem muda é a principal (contagem ou conclusão).
+    const parent=await getTask(task.parent_id);
+    if(!parent)return;
+    await replaceReminders(parent.id,parent,!!parent.completed);
+    if(parent.completed)await dismissTaskNotifications(parent.id);
+    return;
+  }
   await replaceReminders(task.id,task,completed);
   if(completed)await dismissTaskNotifications(task.id);
 }
@@ -257,20 +303,26 @@ export async function snoozeTask(id:number){
   await db.runAsync('DELETE FROM task_notifications WHERE task_id=? AND stage=?',id,SNOOZE_STAGE);
   const snoozed=task.kind==='event'
     ?await scheduleEventSnooze({id,title:task.title,due_at:task.due_at,category:task.category,location:task.location,offsets:[]})
-    :await scheduleSnoozeReminder({id,title:task.title,due_at:task.due_at,category:task.category});
+    :await scheduleSnoozeReminder({id,title:task.title,due_at:task.due_at,category:task.category,subtasks:await subtaskProgress(id)});
   if(snoozed)await db.runAsync('INSERT INTO task_notifications(notification_id,task_id,stage,scheduled_at) VALUES(?,?,?,?)',snoozed.notification_id,id,snoozed.stage,snoozed.scheduled_at);
 }
-export async function deleteTask(id:number){
+export async function deleteTask(id:number,parentGoing=false){
   const db=await ready;
+  // Subtarefas primeiro: assim elas não reagendam os avisos de uma principal que está sendo apagada.
+  const children=await listChildren(id);
+  for(const child of children)await deleteTask(child.id,true);
   await cancelTaskReminders(await reminderIds(id));
   await dismissTaskNotifications(id);
   await db.runAsync('DELETE FROM task_notifications WHERE task_id=?',id);
-  const children=await listChildren(id);
-  for(const child of children)await deleteTask(child.id);
+  const removed=parentGoing?null:await getTask(id);
   await db.runAsync('DELETE FROM daily_history WHERE task_id=?',id);
   await db.runAsync('DELETE FROM tasks WHERE id=?',id);
+  // Apagar uma subtarefa muda a contagem citada no aviso da principal.
+  const parent=removed?.parent_id?await getTask(removed.parent_id):null;
+  if(parent)await replaceReminders(parent.id,parent,!!parent.completed).catch(console.warn);
   await refreshWidget();
 }
+const REMINDER_CONTENT_VERSION='3-icons';
 export async function reconcileReminders(){
   await syncDailyTasks();
   const db=await ready;
@@ -281,7 +333,13 @@ export async function reconcileReminders(){
     await cancelTaskReminders(rows.map(row=>row.notification_id));
     await db.runAsync('DELETE FROM task_notifications');
     await db.runAsync('UPDATE tasks SET notification_id=NULL');
+    await cancelOrphanNotifications(async()=>new Set()).catch(console.warn);
     return;
+  }
+  // Conteúdo dos avisos mudou (rostos do Ping): reagenda tudo uma vez após a atualização.
+  if(await getMeta('reminderContentVersion')!==REMINDER_CONTENT_VERSION){
+    await rescheduleAllReminders();
+    await setMeta('reminderContentVersion',REMINDER_CONTENT_VERSION);
   }
   const pending=await (await import('expo-notifications')).getAllScheduledNotificationsAsync();
   const available=new Set(pending.map(n=>n.identifier));
@@ -306,6 +364,13 @@ export async function reconcileReminders(){
       await replaceReminders(task.id,task,false);
     }
   }
+  // Limpa agendamentos que nenhuma tarefa conhece (lembretes antigos que repetiam sem dono).
+  await cancelOrphanNotifications(trackedNotificationIds).catch(console.warn);
+}
+async function trackedNotificationIds(){
+  const db=await ready;
+  const rows=await db.getAllAsync<{notification_id:string}>('SELECT notification_id FROM task_notifications UNION SELECT notification_id FROM tasks WHERE notification_id IS NOT NULL');
+  return new Set(rows.map(r=>r.notification_id));
 }
 
 export async function rescheduleAllReminders(){
