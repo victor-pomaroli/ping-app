@@ -21,6 +21,22 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.5.0] — 2026-11-16
+
+### Adicionado
+- O Ping ao lado direito do resumo da aba Hoje. O rosto muda com o humor do dia (no horário, +1 h, +3 h) e cada personalidade tem seu jeito parado: o Debochado inclina a cabeça, o Sem Paciência treme o sino e o De Boa balança devagar. Ele fala em balões curtos no tom da personalidade e responde a toques.
+- O Ping reage a tarefa concluída (pulinho), a dia zerado (pulo grande, sino e vibração), a atrasos (sino chacoalha), a puxar para atualizar (sino) e dorme (Zzz) no dia em branco; ganha estrelinhas na missão cumprida.
+- Puxar para atualizar nas três abas, com o spinner nas cores do tema.
+- Ajustes › Movimento › **Animações do Ping**: liga e desliga todo o movimento novo. O app também respeita "reduzir movimento" do Android.
+- Dependências novas: `react-native-reanimated`, `react-native-worklets` e `expo-haptics`. Exige gerar um novo build nativo (não roda no Expo Go).
+
+### Alterado
+- Concluir tarefa: a caixa dá um pop de mola, o ✓ estoura, um "+1" sobe, o risco do título roda na thread de UI e há uma vibração leve. O cartão sai com fade e os de baixo deslizam para fechar o espaço.
+- Resumo: o número grande rola ao mudar, os segmentos de progresso se enchem em fila, o carimbo "FEITAS" bate e a barra contínua enche com mola e um brilho.
+- Os cartões entram escalonados na primeira carga (e com fade quando surgem depois); "PASSOU DA HORA" pulsa uma vez ao chegar; o botão + afunda ao toque e chacoalha de leve no dia em branco.
+- O destaque de uma tarefa vindo da notificação ou do widget ganha ondas de sonar saindo da caixa de concluir.
+- Os pontos da barra de navegação acompanham o deslize entre as abas em tempo real.
+
 ## [1.4.5] — 2026-11-10
 
 ### Alterado

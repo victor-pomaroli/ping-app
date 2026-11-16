@@ -1,6 +1,6 @@
 {
   "name": "ping",
-  "version": "1.4.5",
+  "version": "1.5.0",
   "private": true,
   "main": "index.ts",
   "scripts": {
@@ -16,6 +16,7 @@
     "@react-native-community/datetimepicker": "*",
     "expo": "~58.0.23",
     "expo-constants": "*",
+    "expo-haptics": "~58.0.7",
     "expo-linking": "~58.0.16",
     "expo-notifications": "~58.1.8",
     "expo-router": "~58.0.30",
@@ -26,8 +27,10 @@
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
     "react-native-android-widget": "^0.22.1",
+    "react-native-reanimated": "4.7.1",
     "react-native-safe-area-context": "~5.11.1",
-    "react-native-screens": "*"
+    "react-native-screens": "*",
+    "react-native-worklets": "~0.13.0"
   },
   "devDependencies": {
     "@types/react": "*",

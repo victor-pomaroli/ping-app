@@ -24,11 +24,11 @@ Pessoas que usam o celular como central do dia e que já tentaram listas de tare
 
 | Aba | Para que serve |
 |---|---|
-| **Hoje** | O dia em uma tela. Uma nota de resumo com quantas tarefas faltam, quantas estão atrasadas e o progresso do dia, com um rótulo que muda com o estado (*Tá devendo*, *Falta pouco*, *Ainda hoje*, *Missão cumprida*, *Dia em branco*). Abaixo, em ordem de urgência: **Passou da hora**, **Agenda de hoje** (eventos) e **No radar**. As concluídas do dia ficam recolhidas numa linha. Seções vazias não aparecem. Com tudo feito, o app solta confetes. |
+| **Hoje** | O dia em uma tela. Uma nota de resumo com quantas tarefas faltam, quantas estão atrasadas e o progresso do dia, com um rótulo que muda com o estado (*Tá devendo*, *Falta pouco*, *Ainda hoje*, *Missão cumprida*, *Dia em branco*). Abaixo, em ordem de urgência: **Passou da hora**, **Agenda de hoje** (eventos) e **No radar**. As concluídas do dia ficam recolhidas numa linha. Seções vazias não aparecem. Com tudo feito, o app solta confetes. O **Ping** fica ao lado do resumo: o rosto, o jeito parado e as falas mudam com o dia e com a personalidade escolhida, e tocar nele rende uma resposta. |
 | **Tarefas** | Tudo o que está aberto, com atalho para **Minhas rotinas** e filtros por tipo (Eventos) e assunto. Um bloco **Hoje** (rotinas, atrasadas, ainda hoje e concluídas hoje) separado de **Próximos** (dias seguintes e tarefas sem data). |
 | **Calendário** | Mês com bolinhas por dia (tarefas e eventos em cores diferentes) e a lista do dia escolhido. O botão **+** cria a tarefa já no dia selecionado. |
 
-Gestos: tocar num cartão abre a edição; segurar pede confirmação para excluir; arrastar para os lados troca de aba.
+Gestos: tocar num cartão abre a edição; segurar pede confirmação para excluir; arrastar para os lados troca de aba; puxar para baixo atualiza.
 
 ### Tipos de item
 
@@ -56,7 +56,7 @@ Um widget de tela inicial com as próximas tarefas e as concluídas do dia, no m
 
 - **Primeiro uso:** um onboarding de 4 passos (nome, forma de tratamento, personalidade e tema).
 - **Temas:** escuro original (verde-limão sobre carvão), claro suave, rosa chiclete (claro) e azul noturno (escuro). Cada um muda o app inteiro, os diálogos, o widget e o papel da nota de resumo.
-- **Ajustes:** nome, tratamento, personalidade, tema, lembretes ativos ou pausados, privacidade, teste de notificação, diagnóstico dos lembretes programados, permissões do Android e "apagar todas as tarefas".
+- **Ajustes:** nome, tratamento, personalidade, tema, animações do Ping, lembretes ativos ou pausados, privacidade, teste de notificação, diagnóstico dos lembretes programados, permissões do Android e "apagar todas as tarefas".
 - **Histórico:** concluídas há mais de 30 dias são arquivadas automaticamente e podem ser restauradas.
 
 ## Princípios de design
@@ -74,4 +74,4 @@ Um widget de tela inicial com as próximas tarefas e as concluídas do dia, no m
 
 ## Stack
 
-React Native + Expo (SDK 58), Expo Router, expo-sqlite, expo-notifications e react-native-android-widget. O APK é gerado pelo GitHub Actions (workflow *Build Android APK*).
+React Native + Expo (SDK 58), Expo Router, expo-sqlite, expo-notifications, react-native-reanimated (animações) e react-native-android-widget. O APK é gerado pelo GitHub Actions (workflow *Build Android APK*).

@@ -1,6 +1,11 @@
-import React,{useEffect,useRef} from 'react';
-import {View,Text,StyleSheet,Animated,Easing} from 'react-native';
+import React,{useEffect,useLayoutEffect,useRef,useState} from 'react';
+import {View,Text,StyleSheet,Animated,Easing,type StyleProp,type TextStyle} from 'react-native';
+import Reanimated,{Easing as REasing,useAnimatedStyle,useSharedValue,withDelay,withSequence,withSpring,withTiming} from 'react-native-reanimated';
+import {spring,useMotionEnabled} from '../motion';
 import {isDarkAppearance,type Appearance} from '../theme';
+import type {NotificationPersonality} from '../preferences';
+import {dayMood,type DayMood} from '../ping-lines';
+import {PingMascot,PING_SIZE} from './PingMascot';
 
 /**
  * "O resumo da ópera" da aba Hoje. Cada tema tem um papel diferente, desenhado só com Views:
@@ -8,18 +13,21 @@ import {isDarkAppearance,type Appearance} from '../theme';
  * - temas claros (suave e rosa): post-it quadrado clássico com tachinha e a ponta de baixo levantando.
  * As cores de cada tema ficam em `binderColors`/`postitColors`; o desenho e a animação são os mesmos.
  */
-type Props={appearance:Appearance;page:string;left:number;overdue:number;today:number;done:number;celebrateKey?:number};
+type Props={
+  appearance:Appearance;page:string;left:number;overdue:number;today:number;done:number;celebrateKey?:number;
+  /** Ping ao lado do papel: personalidade, aba Hoje na tela e contador de tarefas concluídas. */
+  personality?:NotificationPersonality;active?:boolean;completeKey?:number;refreshKey?:number;
+};
+/** Quanto do Ping encosta no papel (px): ele "gruda" na borda direita, em cima da margem do post-it. */
+const PING_OVERLAP=26;
 
 const pad=(n:number)=>String(n).padStart(2,'0');
 const plural=(n:number,one:string,many:string)=>`${n} ${n===1?one:many}`;
 /** Rótulo que muda com o estado do dia, em vez de um título fixo. */
-function moodLabel(left:number,overdue:number,done:number){
-  if(overdue>0)return 'TÁ DEVENDO';
-  if(left>0)return done>0&&left<=2?'FALTA POUCO':'AINDA HOJE';
-  return done>0?'MISSÃO CUMPRIDA':'DIA EM BRANCO';
-}
+const MOOD_LABELS:Record<DayMood,string>={devendo:'TÁ DEVENDO',falta_pouco:'FALTA POUCO',ainda_hoje:'AINDA HOJE',cumprida:'MISSÃO CUMPRIDA',vazio:'DIA EM BRANCO'};
+const moodLabel=(left:number,overdue:number,done:number)=>MOOD_LABELS[dayMood(left,overdue,done)];
 
-export function SummaryNote({appearance,page,left,overdue,today,done,celebrateKey=0}:Props){
+export function SummaryNote({appearance,page,left,overdue,today,done,celebrateKey=0,personality='debochado',active=true,completeKey=0,refreshKey=0}:Props){
   const binder=isDarkAppearance(appearance);
   const bc=binderColors[appearance]??binderColors.dark;
   const pc=postitColors[appearance]??postitColors.softLight;
@@ -47,7 +55,8 @@ export function SummaryNote({appearance,page,left,overdue,today,done,celebrateKe
     {scale:lift.interpolate({inputRange:[0,1],outputRange:[1,1.04]})},
     {rotate:wobble.interpolate({inputRange:[-1,1],outputRange:['-5deg','5deg']})},
   ]};
-  return <Animated.View style={[look.wrap,motion]}>
+  return <View style={{flexDirection:'row',alignItems:'center'}}>
+  <Animated.View style={[look.wrap,motion,{flex:1}]}>
     {binder?<View pointerEvents="none" style={[dark.tape,{backgroundColor:bc.tape}]}/>:null}
     <View style={[look.sheet,binder&&{backgroundColor:look.paper}]}>
       {binder
@@ -55,20 +64,26 @@ export function SummaryNote({appearance,page,left,overdue,today,done,celebrateKe
         :<LiftedPaper colors={pc}/>}
       <Text style={[base.label,{color:look.ink}]}>{moodLabel(left,overdue,done)}</Text>
       <View style={base.numbers}>
-        <Text style={[base.big,{color:look.ink}]}>{pad(left)}</Text>
+        <RollingNumber value={left} style={[base.big,{color:look.ink}]}/>
         <View style={base.side}>
           <Text style={[base.sideBig,{color:look.ink}]}>{plural(overdue,'atrasada','atrasadas')}</Text>
           <Text style={[base.sideSmall,{color:look.ink}]}>{today} pra hoje</Text>
         </View>
       </View>
       <View style={[base.done,{borderTopColor:look.rule}]}>
-        <View style={[base.stamp,{borderColor:look.ink}]}><Text style={[base.stampText,{color:look.ink}]}>✓ {pad(done)} {done===1?'FEITA':'FEITAS'}</Text></View>
+        <StampSlam value={done}><View style={[base.stamp,{borderColor:look.ink}]}><Text style={[base.stampText,{color:look.ink}]}>✓ {pad(done)} {done===1?'FEITA':'FEITAS'}</Text></View></StampSlam>
         <Progress done={done} total={total} ink={look.ink} empty={look.rule}/>
         <Text style={[base.frac,{color:look.ink}]}>{done}/{total}</Text>
       </View>
       {!binder?<View pointerEvents="none" style={[light.pin,{backgroundColor:pc.pin}]}><View style={light.pinShine}/></View>:null}
     </View>
-  </Animated.View>;
+  </Animated.View>
+  <View style={{width:PING_SIZE-PING_OVERLAP,height:PING_SIZE,zIndex:10,overflow:'visible'}}>
+    <View style={{position:'absolute',left:-PING_OVERLAP,top:0}}>
+      <PingMascot personality={personality} left={left} overdue={overdue} done={done} active={active} celebrateKey={celebrateKey} completeKey={completeKey} refreshKey={refreshKey}/>
+    </View>
+  </View>
+  </View>;
 }
 
 /**
@@ -90,8 +105,102 @@ function LiftedPaper({colors}:{colors:PostitColors}){
 
 /** Segmentos quando cabem (até 8); acima disso, uma barra contínua. */
 function Progress({done,total,ink,empty}:{done:number;total:number;ink:string;empty:string}){
-  if(total>0&&total<=8)return <View style={base.track}>{Array.from({length:total},(_,i)=><View key={i} style={[base.segment,{backgroundColor:i<done?ink:empty}]}/>)}</View>;
-  return <View style={[base.track,base.bar,{backgroundColor:empty}]}><View style={[base.fill,{backgroundColor:ink,width:`${total?Math.round(done/total*100):0}%`}]}/></View>;
+  // Quantos já estavam feitos antes desta renderização: os segmentos novos entram em fila a partir dali.
+  const before=useRef(done);
+  useEffect(()=>{before.current=done;},[done]);
+  if(total>0&&total<=8)return <View style={base.track}>{Array.from({length:total},(_,i)=><Segment key={i} filled={i<done} ink={ink} empty={empty} delay={Math.max(0,i-before.current)*70}/>)}</View>;
+  return <Bar pct={total?Math.round(done/total*100):0} ink={ink} empty={empty}/>;
+}
+
+/** Segmento que se enche da esquerda para a direita com um pop de mola. Na montagem não anima. */
+function Segment({filled,ink,empty,delay}:{filled:boolean;ink:string;empty:string;delay:number}){
+  const motion=useMotionEnabled();
+  const fill=useSharedValue(filled?1:0);
+  const pop=useSharedValue(1);
+  const mounted=useRef(false);
+  useEffect(()=>{
+    if(!mounted.current){mounted.current=true;return;}
+    if(!motion){fill.value=filled?1:0;return;}
+    if(filled){
+      fill.value=withDelay(delay,withSpring(1,spring.pop));
+      pop.value=withDelay(delay,withSequence(withTiming(1.7,{duration:90}),withSpring(1,spring.pop)));
+    }else fill.value=withTiming(0,{duration:140});
+  },[filled]);
+  const fillStyle=useAnimatedStyle(()=>({transform:[{scaleX:Math.max(0,fill.value)}]}));
+  const popStyle=useAnimatedStyle(()=>({transform:[{scaleY:pop.value}]}));
+  return <Reanimated.View style={[base.segment,{backgroundColor:empty,overflow:'hidden'},popStyle]}>
+    <Reanimated.View style={[StyleSheet.absoluteFill,{backgroundColor:ink,transformOrigin:'0% 50%'},fillStyle]}/>
+  </Reanimated.View>;
+}
+
+/** Barra contínua (mais de 8 itens): enche com mola e, quando avança, um brilho passa por ela uma vez. */
+function Bar({pct,ink,empty}:{pct:number;ink:string;empty:string}){
+  const motion=useMotionEnabled();
+  const p=useSharedValue(pct);
+  const shine=useSharedValue(0);
+  const width=useSharedValue(0);
+  const last=useRef(pct);
+  useEffect(()=>{
+    const grew=pct>last.current;
+    last.current=pct;
+    if(!motion){p.value=pct;return;}
+    p.value=withSpring(pct,spring.soft);
+    if(grew){shine.value=0.001;shine.value=withTiming(1,{duration:520,easing:REasing.out(REasing.quad)});}
+  },[pct]);
+  const fillStyle=useAnimatedStyle(()=>({width:`${Math.min(100,Math.max(0,p.value))}%` as `${number}%`}));
+  const shineStyle=useAnimatedStyle(()=>({
+    opacity:shine.value>0&&shine.value<1?1:0,
+    transform:[{translateX:(shine.value*1.4-0.35)*width.value}],
+  }));
+  return <View onLayout={event=>{width.value=event.nativeEvent.layout.width;}} style={[base.track,base.bar,{backgroundColor:empty}]}>
+    <Reanimated.View style={[base.fill,{backgroundColor:ink,overflow:'hidden'},fillStyle]}>
+      <Reanimated.View pointerEvents="none" style={[{position:'absolute',top:0,bottom:0,left:0,width:26,backgroundColor:'rgba(255,255,255,0.45)'},shineStyle]}/>
+    </Reanimated.View>
+  </View>;
+}
+
+/** Número que "rola": o valor antigo sai e o novo entra (de baixo se subiu, de cima se desceu). */
+function RollingNumber({value,style}:{value:number;style:StyleProp<TextStyle>}){
+  const motion=useMotionEnabled();
+  const [prev,setPrev]=useState<number|null>(null);
+  const last=useRef(value);
+  const t=useSharedValue(1);
+  const dir=useSharedValue(1);
+  // Layout effect: o `t` volta a 0 antes do primeiro quadro com o valor novo, sem piscar.
+  useLayoutEffect(()=>{
+    if(last.current===value)return;
+    const before=last.current;
+    dir.value=value>before?1:-1;
+    last.current=value;
+    if(!motion)return;
+    setPrev(before);
+    t.value=0;
+    t.value=withTiming(1,{duration:260,easing:REasing.out(REasing.cubic)});
+    const timer=setTimeout(()=>setPrev(null),300);
+    return()=>clearTimeout(timer);
+  },[value]);
+  const entering=useAnimatedStyle(()=>({opacity:t.value,transform:[{translateY:(1-t.value)*14*dir.value},{scale:0.92+0.08*t.value}]}));
+  const leaving=useAnimatedStyle(()=>({opacity:1-t.value,transform:[{translateY:-t.value*14*dir.value}]}));
+  return <View>
+    <Reanimated.Text style={[style,entering]}>{pad(value)}</Reanimated.Text>
+    {prev!==null?<Reanimated.Text pointerEvents="none" style={[style,{position:'absolute',left:0,top:0},leaving]}>{pad(prev)}</Reanimated.Text>:null}
+  </View>;
+}
+
+/** O carimbo "✓ 03 FEITAS" bate (cresce e assenta com mola) toda vez que o número de feitas sobe. */
+function StampSlam({value,children}:{value:number;children:React.ReactNode}){
+  const motion=useMotionEnabled();
+  const scale=useSharedValue(1);
+  const last=useRef(value);
+  useEffect(()=>{
+    const up=value>last.current;
+    last.current=value;
+    if(!up||!motion)return;
+    scale.value=1.45;
+    scale.value=withSpring(1,{damping:8,stiffness:300,mass:0.5});
+  },[value]);
+  const slam=useAnimatedStyle(()=>({transform:[{scale:scale.value}]}));
+  return <Reanimated.View style={slam}>{children}</Reanimated.View>;
 }
 
 const base=StyleSheet.create({

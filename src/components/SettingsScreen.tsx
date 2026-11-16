@@ -6,12 +6,13 @@ import {getPreferences,setPreference,Preferences,AddressStyle,NotificationPerson
 import {rescheduleAllReminders,deleteAllTasks} from '../store';
 import {testNotification} from '../notifications';
 import {FACE_IMAGES,FaceMoment} from '../faces';
+import {setAnimationsPreference} from '../motion';
 import {useAppTheme,ThemeColors,Appearance,palettes,appearances,appearanceNames} from '../theme';
 
 export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
  const {colors:c,appearance,changeAppearance}=useAppTheme();
  const s=React.useMemo(()=>createStyles(c),[c]);
- const [prefs,setPrefs]=useState<Preferences>({notifications:true,privatePreviews:false,appearance:'dark',displayName:'',addressStyle:'neutral',personality:'debochado',eventAlerts:[30]});
+ const [prefs,setPrefs]=useState<Preferences>({notifications:true,privatePreviews:false,appearance:'dark',displayName:'',addressStyle:'neutral',personality:'debochado',eventAlerts:[30],animations:true});
  const [busy,setBusy]=useState(false);
  const [permission,setPermission]=useState('Verificando...');
  const [themeBusy,setThemeBusy]=useState(false);
@@ -80,6 +81,13 @@ export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
      await rescheduleAllReminders();
    }catch(e){showError('Não foi possível salvar',e);}
    finally{setBusy(false);}
+ }
+ async function changeAnimations(value:boolean){
+   const previous=prefs.animations;
+   setPrefs(prev=>({...prev,animations:value}));
+   setAnimationsPreference(value);
+   try{await setPreference('animations',value);}
+   catch(e){setPrefs(prev=>({...prev,animations:previous}));setAnimationsPreference(previous);showError('Não foi possível salvar',e);}
  }
  function confirmDelete(){
    showDialog({eyebrow:'PING / EXCLUSÃO',title:'Apagar todas as tarefas?',message:'Essa ação exclui permanentemente todas as tarefas e cancela seus lembretes. Não é possível desfazer.',cancelLabel:'CANCELAR',confirmLabel:'APAGAR TUDO',destructive:true,onConfirm:async()=>{
@@ -152,6 +160,10 @@ export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
         <View style={[s.personalityPreview,{backgroundColor:c.background,borderColor:c.border}]}><Text style={{color:c.muted,fontSize:11,lineHeight:17}}>{preview}</Text></View>
       </Pressable>;
     })}
+   </View>
+   <Text style={s.section}>MOVIMENTO</Text>
+   <View style={s.panel}>
+     <View style={s.row}><View style={s.copy}><Text style={s.title}>Animações do Ping</Text><Text style={s.detail}>Pulinhos, risquinhos e reações ao concluir tarefas. Desligue se preferir o app mais quieto.</Text></View><Switch value={prefs.animations} onValueChange={changeAnimations} trackColor={{false:c.border,true:c.accentSoft}} thumbColor={prefs.animations?c.accent:c.muted}/></View>
    </View>
    <Text style={s.section}>NOTIFICAÇÕES</Text>
    <View style={s.panel}>

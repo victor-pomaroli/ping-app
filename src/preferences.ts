@@ -3,16 +3,16 @@ import * as SQLite from 'expo-sqlite';
 
 export type NotificationPersonality='debochado'|'semPaciencia'|'deBoa';
 export type AddressStyle='masculine'|'feminine'|'neutral';
-export type Preferences={notifications:boolean;privatePreviews:boolean;appearance:Appearance;displayName:string;addressStyle:AddressStyle;personality:NotificationPersonality;eventAlerts:number[]};
-/** `eventAlerts`: antecedências (min) do último evento salvo; viram o padrão do próximo. */
-const defaults:Preferences={notifications:true,privatePreviews:false,appearance:'dark',displayName:'',addressStyle:'neutral',personality:'debochado',eventAlerts:[30]};
+export type Preferences={notifications:boolean;privatePreviews:boolean;appearance:Appearance;displayName:string;addressStyle:AddressStyle;personality:NotificationPersonality;eventAlerts:number[];animations:boolean};
+/** `eventAlerts`: antecedências (min) do último evento salvo; viram o padrão do próximo. `animations`: movimento do Ping e dos cartões. */
+const defaults:Preferences={notifications:true,privatePreviews:false,appearance:'dark',displayName:'',addressStyle:'neutral',personality:'debochado',eventAlerts:[30],animations:true};
 const db=SQLite.openDatabaseAsync('tasks.db');
 export async function getPreferences():Promise<Preferences>{
   const conn=await db;
   await conn.execAsync('CREATE TABLE IF NOT EXISTS app_preferences (key TEXT PRIMARY KEY,value TEXT NOT NULL)');
   const rows=await conn.getAllAsync<{key:string;value:string}>('SELECT key,value FROM app_preferences');
   const values=Object.fromEntries(rows.map(row=>[row.key,row.value]));
-  return {notifications:values.notifications===undefined?defaults.notifications:values.notifications==='true',privatePreviews:values.privatePreviews==='true',appearance:normalizeAppearance(values.appearance),displayName:values.displayName??'',addressStyle:values.addressStyle==='masculine'||values.addressStyle==='feminine'?values.addressStyle:'neutral',personality:values.personality==='semPaciencia'||values.personality==='deBoa'?values.personality:'debochado',eventAlerts:values.eventAlerts===undefined?defaults.eventAlerts:values.eventAlerts.split(',').filter(Boolean).map(Number).filter(n=>Number.isFinite(n)&&n>=0)};
+  return {notifications:values.notifications===undefined?defaults.notifications:values.notifications==='true',privatePreviews:values.privatePreviews==='true',appearance:normalizeAppearance(values.appearance),displayName:values.displayName??'',addressStyle:values.addressStyle==='masculine'||values.addressStyle==='feminine'?values.addressStyle:'neutral',personality:values.personality==='semPaciencia'||values.personality==='deBoa'?values.personality:'debochado',eventAlerts:values.eventAlerts===undefined?defaults.eventAlerts:values.eventAlerts.split(',').filter(Boolean).map(Number).filter(n=>Number.isFinite(n)&&n>=0),animations:values.animations===undefined?defaults.animations:values.animations==='true'};
 }
 export async function setPreference<K extends keyof Preferences>(key:K,value:Preferences[K]){
   const conn=await db;

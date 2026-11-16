@@ -1,5 +1,5 @@
 import React,{useCallback,useRef,useState} from 'react';
-import {View,Text,ScrollView,Pressable,StyleSheet,AppState,StatusBar,Dimensions,Animated,TextStyle} from 'react-native';
+import {View,Text,ScrollView,Pressable,StyleSheet,AppState,StatusBar,Dimensions,Animated,TextStyle,RefreshControl} from 'react-native';
 import {useFocusEffect,useRouter} from 'expo-router';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {localDay,Task,listTasks,listTaskPage,archiveOldCompletedTasks,completeTask,deleteTask} from '../src/store';
@@ -12,8 +12,14 @@ import {TaskTitle} from '../src/components/TaskTitle';
 import {sortTasks,sectionTasks} from '../src/task-order';
 import {EventCard} from '../src/components/EventCard';
 import {Confetti} from '../src/components/Confetti';
+import Reanimated,{LinearTransition,FadeOut,FadeInDown} from 'react-native-reanimated';
+import {AnimatedCheck} from '../src/components/AnimatedCheck';
+import {AnimatedFab} from '../src/components/AnimatedFab';
+import {AttentionPulse} from '../src/components/AttentionPulse';
+import {SonarPing} from '../src/components/SonarPing';
+import {COMPLETE_SETTLE,STAGGER,useMotionEnabled} from '../src/motion';
 import {takePendingHighlight,onHighlightRequest} from '../src/highlight';
-import {getMeta,setMeta} from '../src/preferences';
+import {getMeta,setMeta,getPreferences,type NotificationPersonality} from '../src/preferences';
 
 type Tab='home'|'tasks'|'calendar';
 const formatDate=(timestamp:number)=>new Date(timestamp).toLocaleString('pt-BR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
@@ -66,6 +72,41 @@ export default function Home(){
   const scrollY=useRef<Record<Tab,number>>({home:0,tasks:0,calendar:0});
   const highlightTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const [confettiKey,setConfettiKey]=useState(0);
+  const motionOn=useMotionEnabled();
+  // Ping ao lado do post-it: personalidade (relida ao voltar dos Ajustes) e gatilho de "concluí uma".
+  const [personality,setPersonality]=useState<NotificationPersonality>('debochado');
+  const [completeKey,setCompleteKey]=useState(0);
+  // Puxar para atualizar: o spinner é o nativo do Android (nas cores do tema) e o Ping toca o sino ao terminar.
+  const [refreshing,setRefreshing]=useState(false);
+  const [refreshKey,setRefreshKey]=useState(0);
+  async function pullRefresh(){
+    if(refreshing)return;
+    setRefreshing(true);
+    try{await refresh();}
+    catch(e){console.warn(e);}
+    finally{setRefreshing(false);setRefreshKey(k=>k+1);}
+  }
+  // Estado otimista do concluir/reabrir: a caixa muda na hora e a tarefa só sai da lista depois
+  // que o pop e o risco terminam (COMPLETE_SETTLE); a chave some quando o banco já foi atualizado.
+  const [flipped,setFlipped]=useState<Record<number,boolean>>({});
+  const layoutAnim=motionOn?LinearTransition.springify().damping(20).stiffness(220):undefined;
+  const exitAnim=motionOn?FadeOut.duration(150):undefined;
+  // Entrada escalonada só na primeira carga: os primeiros cartões sobem um a um. Depois disso, cartão novo
+  // (tarefa criada, ou que mudou de seção) só aparece com um fade rápido. Trocar de aba ou recarregar
+  // não remonta nada, então nada repete.
+  const firstLoad=useRef(true);
+  React.useEffect(()=>{
+    if(!tasks.length)return;
+    const timer=setTimeout(()=>{firstLoad.current=false;},1200);
+    return()=>clearTimeout(timer);
+  },[tasks.length>0]);
+  let enterIndex=0;
+  /** Cartão dentro de um container animado: entra com fade, e os de baixo deslizam para fechar o buraco quando um sai. */
+  const motionWrap=(id:number,node:React.ReactNode)=>{
+    const index=enterIndex++;
+    const enter=motionOn?FadeInDown.duration(260).delay(firstLoad.current?Math.min(index,7)*STAGGER:0):undefined;
+    return <Reanimated.View key={id} entering={enter} layout={layoutAnim} exiting={exitAnim}>{node}</Reanimated.View>;
+  };
   const router=useRouter();
   const insets=useSafeAreaInsets();
   const refresh=useCallback(async()=>{await archiveOldCompletedTasks();const all=await listTasks();setTasks(all);setVisibleTaskCount(50);setNow(Date.now());},[]);
@@ -84,6 +125,7 @@ export default function Home(){
   useFocusEffect(useCallback(()=>{
     opening.current=false;
     refresh().catch(console.warn);
+    getPreferences().then(p=>setPersonality(p.personality)).catch(console.warn);
     const sub=AppState.addEventListener('change',state=>{if(state==='active')refresh().catch(console.warn);});
     const interval=setInterval(()=>setNow(Date.now()),30000);
     return ()=>{sub.remove();clearInterval(interval);};
@@ -117,8 +159,17 @@ export default function Home(){
   const completedToday=roots.filter(t=>!!t.completed&&t.completed_at!=null&&new Date(t.completed_at).toDateString()===new Date(now).toDateString())
     .sort((a,b)=>(b.completed_at??0)-(a.completed_at??0));
   async function toggle(t:Task){
-    try{await completeTask(t.id,!t.completed);await refresh();}
+    if(t.id in flipped)return;
+    const next=!t.completed;
+    setFlipped(m=>({...m,[t.id]:next}));
+    if(next)setCompleteKey(k=>k+1);
+    try{
+      if(motionOn)await new Promise<void>(resolve=>setTimeout(resolve,COMPLETE_SETTLE));
+      await completeTask(t.id,next);
+      await refresh();
+    }
     catch(e){setFeedback({title:'Não deu certo.',message:String(e)});}
+    finally{setFlipped(m=>{const {[t.id]:_gone,...rest}=m;return rest;});}
   }
   function remove(t:Task){setDeleteTarget(t);}
   async function confirmDelete(){
@@ -138,25 +189,25 @@ export default function Home(){
   function card(t:Task,ctx:CardContext={}){
     if(t.parent_id)return subCard(t);
     const lit=!!highlight&&highlight.id===t.id&&highlight.page===ctx.page;
-    const glow=lit?<Animated.View pointerEvents="none" style={[s.highlight,{opacity:highlightAnim}]}/>:null;
+    // Destaque vindo da notificação/widget: o retângulo acende e três ondas de sonar saem da caixa de concluir.
+    const glow=lit?<><Animated.View pointerEvents="none" style={[s.highlight,{opacity:highlightAnim}]}/><SonarPing color={c.accent}/></>:null;
     if(t.kind==='event'){
       const event=<EventCard key={t.id} task={t} now={now} colors={c} appearance={appearance} onPress={()=>router.push({pathname:'/edit',params:{id:String(t.id)}})} onLongPress={()=>remove(t)}/>;
-      return lit?<View key={t.id} ref={highlightRef}>{glow}{event}</View>:event;
+      return motionWrap(t.id,lit?<View ref={highlightRef}>{glow}{event}</View>:event);
     }
-    const late=!t.completed&&!t.daily&&!t.no_due&&t.due_at<now;
+    const done=flipped[t.id]??!!t.completed;
+    const late=!done&&!t.daily&&!t.no_due&&t.due_at<now;
     const topic=categoryColors[appearance][t.category]??categoryColors[appearance].general;
     const when=t.daily?(t.no_due?'↻ diária':'↻ diária · '+hhmm(t.due_at))
       :t.no_due?(ctx.dayKnown?'':'Sem data')
       :late?`${isToday(t.due_at)?hhmm(t.due_at):shortDay(t.due_at)} · ${ago(t.due_at,now)}`
       :ctx.dayKnown?hhmm(t.due_at):formatDate(t.due_at);
     const showTopic=t.category!=='general'&&!!categories[t.category];
-    return <Pressable key={t.id} ref={lit?highlightRef:undefined} style={s.task} onPress={()=>router.push({pathname:'/edit',params:{id:String(t.id)}})} onLongPress={()=>remove(t)}>
+    return motionWrap(t.id,<Pressable ref={lit?highlightRef:undefined} style={s.task} onPress={()=>router.push({pathname:'/edit',params:{id:String(t.id)}})} onLongPress={()=>remove(t)}>
       {glow}
-      <Pressable accessibilityRole="checkbox" accessibilityLabel={t.completed?'Marcar como pendente':'Concluir tarefa'} accessibilityState={{checked:!!t.completed}} hitSlop={8} onPress={()=>toggle(t)} style={[s.check,late?{borderColor:c.danger}:undefined,!!t.completed?s.checked:undefined]}>
-        <Text style={s.checkText}>{t.completed?'✓':''}</Text>
-      </Pressable>
+      <AnimatedCheck checked={done} onPress={()=>toggle(t)} accessibilityLabel={done?'Marcar como pendente':'Concluir tarefa'} plusColor={c.accent} boxStyle={[s.check,late?{borderColor:c.danger}:undefined,done?s.checked:undefined]} markStyle={s.checkText}/>
       <View style={{flex:1,gap:4}}>
-        <TaskTitle key={`${t.id}-${t.completed}`} title={t.title} completed={!!t.completed} colors={c}/>
+        <TaskTitle key={`${t.id}-${done}`} title={t.title} completed={done} colors={c}/>
         {t.description?.trim()?<Text style={s.taskDescription} numberOfLines={2}>{t.description.trim()}</Text>:null}
         {showTopic||when?<Text style={s.meta} numberOfLines={1}>
           {showTopic?<Text style={{color:topic.text,fontWeight:'700'}}>{categories[t.category]}{when?' · ':''}</Text>:null}
@@ -164,21 +215,20 @@ export default function Home(){
         </Text>:null}
       </View>
       <View accessibilityLabel={`Urgência ${({low:'baixa',medium:'média',high:'alta'} as const)[t.priority]}`} style={[s.priorityLine,{backgroundColor:priorityColors[t.priority]}]}/>
-    </Pressable>;
+    </Pressable>);
   }
   /**
    * Subtarefa em linha compacta: herda assunto, data e urgência da principal, então
    * mostra só a caixa e o título, recuada e sem fundo próprio (antes ficava espremida).
    */
   function subCard(t:Task){
-    return <Pressable key={t.id} style={s.subTask} onPress={()=>router.push({pathname:'/edit',params:{id:String(t.id)}})} onLongPress={()=>remove(t)}>
-      <Pressable accessibilityRole="checkbox" accessibilityLabel={t.completed?'Marcar como pendente':'Concluir tarefa'} accessibilityState={{checked:!!t.completed}} hitSlop={8} onPress={()=>toggle(t)} style={[s.check,s.subCheck,!!t.completed?s.checked:undefined]}>
-        <Text style={[s.checkText,{fontSize:13}]}>{t.completed?'✓':''}</Text>
-      </Pressable>
+    const done=flipped[t.id]??!!t.completed;
+    return motionWrap(t.id,<Pressable style={s.subTask} onPress={()=>router.push({pathname:'/edit',params:{id:String(t.id)}})} onLongPress={()=>remove(t)}>
+      <AnimatedCheck checked={done} onPress={()=>toggle(t)} accessibilityLabel={done?'Marcar como pendente':'Concluir tarefa'} plusColor={c.accent} boxStyle={[s.check,s.subCheck,done?s.checked:undefined]} markStyle={[s.checkText,{fontSize:13}]}/>
       <View style={{flex:1}}>
-        <TaskTitle key={`${t.id}-${t.completed}`} title={t.title} completed={!!t.completed} colors={c} style={{fontSize:15,fontWeight:'600'}}/>
+        <TaskTitle key={`${t.id}-${done}`} title={t.title} completed={done} colors={c} style={{fontSize:15,fontWeight:'600'}}/>
       </View>
-    </Pressable>;
+    </Pressable>);
   }
   const empty=(message:string)=><Text style={s.empty}>{message}</Text>;
   /** Título de seção discreto: rótulo cinza + contagem, sem linha. Só "passou da hora" ganha cor. */
@@ -203,6 +253,8 @@ export default function Home(){
     {groupedCards(section.tasks,filteredPage,{dayKnown:/^d\d/.test(section.key),page:'tasks'})}
   </React.Fragment>;
   const homeHasPending=overdue.length+agenda.length+upcoming.length>0;
+  // "Dia em branco": nada pendente e nada concluído. Aí o + convida a criar a primeira tarefa.
+  const dayBlank=!homeHasPending&&completedToday.length===0;
   // Comemoração (confete + post-it balançando): toda vez que o dia é zerado. Ao ver alguma tarefa
   // pendente em Hoje, a comemoração é "rearmada"; ao zerar de novo (concluiu uma nova, ou reabriu e
   // concluiu a mesma), solta outra vez. Fica salva no banco com o dia, então trocar de aba ou reabrir
@@ -273,15 +325,16 @@ export default function Home(){
     >
       {tabs.map((page,index)=><View key={page} style={{width:pageWidth,flex:1}}>
       <Animated.ScrollView ref={(el:any)=>{scrollRefs.current[page]=el;}} style={{flex:1}} contentContainerStyle={[s.container,{paddingTop:insets.top+89}]} keyboardShouldPersistTaps="handled" scrollEventThrottle={16}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={pullRefresh} colors={[c.accent]} tintColor={c.accent} progressBackgroundColor={c.surfaceRaised} progressViewOffset={insets.top+60}/>}
         onScroll={Animated.event([{nativeEvent:{contentOffset:{y:verticalY[page]}}}],{useNativeDriver:true,listener:(event:any)=>{scrollY.current[page]=event.nativeEvent.contentOffset.y;}})}>
 
       <>
       <Text style={s.eyebrow}>{greetings[(new Date(now).getDay()+6)%7]}  /  {new Date(now).toLocaleDateString('pt-BR',{day:'2-digit',month:'long'}).toUpperCase()}</Text>
       {page==='home'?<Text style={s.heading}>{'Seu dia.\nSem desculpas.'}</Text>:page==='calendar'?<Text style={s.heading}>{'Seu tempo.\nSeu ritmo.'}</Text>:null}
       {page==='home'?<>
-        <SummaryNote appearance={appearance} page={c.background} left={overdue.length+todayAhead.length} overdue={overdue.length} today={todayAhead.length} done={completedToday.length} celebrateKey={confettiKey}/>
+        <SummaryNote appearance={appearance} page={c.background} left={overdue.length+todayAhead.length} overdue={overdue.length} today={todayAhead.length} done={completedToday.length} celebrateKey={confettiKey} personality={personality} active={tab==='home'} completeKey={completeKey} refreshKey={refreshKey}/>
         {/* Ordem de urgência: atrasadas → agenda → radar. Seções vazias não aparecem. */}
-        {overdue.length?<>{sectionHead('PASSOU DA HORA',overdue.length,c.danger)}{groupedCards(overdue,tasks,{page:'home'})}</>:null}
+        {overdue.length?<><AttentionPulse active={tab==='home'}>{sectionHead('PASSOU DA HORA',overdue.length,c.danger)}</AttentionPulse>{groupedCards(overdue,tasks,{page:'home'})}</>:null}
         {agenda.length?<>{sectionHead('AGENDA DE HOJE',agenda.length)}{groupedCards(agenda,tasks,{dayKnown:true,page:'home'})}</>:null}
         {upcoming.length?<>{sectionHead('NO RADAR',upcoming.length)}{groupedCards(upcoming.slice(0,8),tasks,{dayKnown:true,page:'home'})}</>:null}
         {!homeHasPending?empty(completedToday.length?'Tudo feito por hoje. Que paz suspeita.':'Nada pra hoje. Toque no + para criar uma tarefa.'):null}
@@ -337,10 +390,14 @@ export default function Home(){
       </Animated.View>
       </View>)}
     </Animated.ScrollView>
-    {<Pressable accessibilityLabel={tab==='calendar'?'Criar tarefa em '+calendarDay.toLocaleDateString('pt-BR',{day:'numeric',month:'long'}):'Criar tarefa'} style={[s.add,{bottom:91+insets.bottom}]} onPress={openCreate}><Text style={s.plus}>+</Text></Pressable>}
+    <AnimatedFab accessibilityLabel={tab==='calendar'?'Criar tarefa em '+calendarDay.toLocaleDateString('pt-BR',{day:'numeric',month:'long'}):'Criar tarefa'} style={[s.add,{bottom:91+insets.bottom}]} onPress={openCreate} invite={tab==='home'&&dayBlank}><Text style={s.plus}>+</Text></AnimatedFab>
     <View style={[s.nav,{paddingBottom:insets.bottom,height:75+insets.bottom}]}>{(['home','tasks','calendar'] as const).map((key,i)=><Pressable key={key} style={[s.navItem,tab===key&&s.navSelected]} onPress={()=>goToTab(key)}>
       <Text style={[s.navText,tab===key&&s.navActive]}>{['HOJE','TAREFAS','CALENDÁRIO'][i]}</Text>
-      {tab===key?<View style={s.dot}/>:null}
+      {/* O ponto acompanha o pager em tempo real: cresce sob a aba que chega e encolhe sob a que sai. */}
+      <Animated.View style={[s.dot,{
+        opacity:horizontalX.interpolate({inputRange:[(i-1)*pageWidth,i*pageWidth,(i+1)*pageWidth],outputRange:[0,1,0],extrapolate:'clamp'}),
+        transform:[{scaleX:horizontalX.interpolate({inputRange:[(i-1)*pageWidth,i*pageWidth,(i+1)*pageWidth],outputRange:[0.2,1,0.2],extrapolate:'clamp'})}],
+      }]}/>
     </Pressable>)}</View>
     <Confetti fireKey={confettiKey} colors={[c.accent,c.event,c.warning,c.danger,'#A9B8FF','#7DDCC7','#FFAD91']}/>
   </View>;
