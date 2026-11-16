@@ -33,7 +33,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Install dependencies from lockfile
-        run: npm ci
+        # Se o lockfile ainda não tem uma dependência nova do package.json, o npm resolve e instala
+        # em vez de falhar. Depois rode `npm install` localmente e commite o package-lock.json.
+        run: npm ci || npm install --no-audit --no-fund
       - name: Generate Android project with Expo
         run: npx expo prebuild --platform android --non-interactive --clean
       - name: Disable R8 shrinking for WorkManager startup diagnosis

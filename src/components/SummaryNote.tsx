@@ -5,7 +5,7 @@ import {spring,useMotionEnabled} from '../motion';
 import {isDarkAppearance,type Appearance} from '../theme';
 import type {NotificationPersonality} from '../preferences';
 import {dayMood,type DayMood} from '../ping-lines';
-import {PingMascot,PING_SIZE} from './PingMascot';
+import {PingMascot,PING_COLUMN,PING_SIZE} from './PingMascot';
 
 /**
  * "O resumo da ópera" da aba Hoje. Cada tema tem um papel diferente, desenhado só com Views:
@@ -18,8 +18,6 @@ type Props={
   /** Ping ao lado do papel: personalidade, aba Hoje na tela e contador de tarefas concluídas. */
   personality?:NotificationPersonality;active?:boolean;completeKey?:number;refreshKey?:number;
 };
-/** Quanto do Ping encosta no papel (px): ele "gruda" na borda direita, em cima da margem do post-it. */
-const PING_OVERLAP=26;
 
 const pad=(n:number)=>String(n).padStart(2,'0');
 const plural=(n:number,one:string,many:string)=>`${n} ${n===1?one:many}`;
@@ -55,7 +53,7 @@ export function SummaryNote({appearance,page,left,overdue,today,done,celebrateKe
     {scale:lift.interpolate({inputRange:[0,1],outputRange:[1,1.04]})},
     {rotate:wobble.interpolate({inputRange:[-1,1],outputRange:['-5deg','5deg']})},
   ]};
-  return <View style={{flexDirection:'row',alignItems:'center'}}>
+  return <View style={{flexDirection:'row',alignItems:'flex-end'}}>
   <Animated.View style={[look.wrap,motion,{flex:1}]}>
     {binder?<View pointerEvents="none" style={[dark.tape,{backgroundColor:bc.tape}]}/>:null}
     <View style={[look.sheet,binder&&{backgroundColor:look.paper}]}>
@@ -78,10 +76,8 @@ export function SummaryNote({appearance,page,left,overdue,today,done,celebrateKe
       {!binder?<View pointerEvents="none" style={[light.pin,{backgroundColor:pc.pin}]}><View style={light.pinShine}/></View>:null}
     </View>
   </Animated.View>
-  <View style={{width:PING_SIZE-PING_OVERLAP,height:PING_SIZE,zIndex:10,overflow:'visible'}}>
-    <View style={{position:'absolute',left:-PING_OVERLAP,top:0}}>
-      <PingMascot personality={personality} left={left} overdue={overdue} done={done} active={active} celebrateKey={celebrateKey} completeKey={completeKey} refreshKey={refreshKey}/>
-    </View>
+  <View style={{width:PING_COLUMN,height:PING_SIZE,zIndex:10,overflow:'visible'}}>
+    <PingMascot personality={personality} left={left} overdue={overdue} done={done} active={active} celebrateKey={celebrateKey} completeKey={completeKey} refreshKey={refreshKey}/>
   </View>
   </View>;
 }

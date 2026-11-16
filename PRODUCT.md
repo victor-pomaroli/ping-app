@@ -74,4 +74,4 @@ Um widget de tela inicial com as próximas tarefas e as concluídas do dia, no m
 
 ## Stack
 
-React Native + Expo (SDK 58), Expo Router, expo-sqlite, expo-notifications, react-native-reanimated (animações) e react-native-android-widget. O APK é gerado pelo GitHub Actions (workflow *Build Android APK*).
+React Native + Expo (SDK 58), Expo Router, expo-sqlite, expo-notifications, react-native-reanimated e react-native-svg (animações e o Ping em vetor) e react-native-android-widget. O APK é gerado pelo GitHub Actions (workflow *Build Android APK*).

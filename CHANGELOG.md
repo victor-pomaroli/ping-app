@@ -21,6 +21,13 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.6.0] — 2026-11-16
+
+### Alterado
+- O Ping foi redesenhado em vetor, sem o quadrado de fundo, e fica numa coluna própria ao lado do post-it, sem cobrir nada. O sino ganhou partes que se mexem: pisca (às vezes duas vezes), olha para os lados, mexe a boca ao falar, as sobrancelhas fazem expressões e o corpo balança com o badalo atrasando como um pêndulo. O Debochado no horário dá uma piscadela de tempos em tempos. Tocar no Ping chacoalha o sino.
+- Os balões viraram pílulas brancas com um selo no canto (`!` irritado, `?` debochado, `♪` leve, `✓` conclusão, `z` dia vazio) e uma pontinha apontando para a cabeça do Ping. Têm no máximo duas linhas, aparecem depois de um "digitando…", o irritado treme, e concluir uma tarefa solta um confete.
+- Dependência nova: `react-native-svg`. Exige gerar um novo build nativo.
+
 ## [1.5.0] — 2026-11-16
 
 ### Adicionado
