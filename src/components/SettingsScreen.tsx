@@ -3,7 +3,8 @@ import {View,Text,Switch,Pressable,StyleSheet,Linking,TextInput,Image} from 'rea
 import {showDialog,showError} from './PingDialog';
 import * as Notifications from 'expo-notifications';
 import {getPreferences,setPreference,Preferences,AddressStyle,NotificationPersonality} from '../preferences';
-import {rescheduleAllReminders,deleteAllTasks} from '../store';
+import {rescheduleAllReminders,deleteAllTasks,syncMoodNotices} from '../store';
+import {setSoundsEnabled} from '../ping-sounds';
 import {testNotification} from '../notifications';
 import {FACE_IMAGES,FaceMoment} from '../faces';
 import {setAnimationsPreference} from '../motion';
@@ -12,7 +13,7 @@ import {useAppTheme,ThemeColors,Appearance,palettes,appearances,appearanceNames}
 export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
  const {colors:c,appearance,changeAppearance}=useAppTheme();
  const s=React.useMemo(()=>createStyles(c),[c]);
- const [prefs,setPrefs]=useState<Preferences>({notifications:true,privatePreviews:false,appearance:'dark',displayName:'',addressStyle:'neutral',personality:'debochado',eventAlerts:[30],animations:true});
+ const [prefs,setPrefs]=useState<Preferences>({notifications:true,privatePreviews:false,appearance:'dark',displayName:'',addressStyle:'neutral',personality:'debochado',eventAlerts:[30],animations:true,sounds:true,moodNotices:true});
  const [busy,setBusy]=useState(false);
  const [permission,setPermission]=useState('Verificando...');
  const [themeBusy,setThemeBusy]=useState(false);
@@ -57,7 +58,7 @@ export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
  async function sendTest(){
    if(testing)return;
    setTesting(true);
-   try{await testNotification();showDialog({eyebrow:'PING / RECADO',title:'Teste agendado',message:'O Ping vai mandar quatro avisos, a cada 10 segundos: o rosto de cada momento (no horário, 1 h e 3 h de atraso) no formato de conversa e, por último, um no formato clássico para comparar. Bloqueie a tela ou feche o app para ver.'});}
+   try{await testNotification();showDialog({eyebrow:'PING / RECADO',title:'Teste agendado',message:'O Ping vai mandar seis avisos, a cada 10 segundos, um para cada sentimento: animado, impaciente, irritado, cansado, com saudade e orgulhoso (dia limpo), cada um com seu rosto, texto e som. Bloqueie a tela ou feche o app para ver.'});}
    catch(e){showError('Teste não agendado',e);}
    finally{setTesting(false);}
  }
@@ -88,6 +89,19 @@ export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
    setAnimationsPreference(value);
    try{await setPreference('animations',value);}
    catch(e){setPrefs(prev=>({...prev,animations:previous}));setAnimationsPreference(previous);showError('Não foi possível salvar',e);}
+ }
+ async function changeSounds(value:boolean){
+   const previous=prefs.sounds;
+   setPrefs(prev=>({...prev,sounds:value}));
+   setSoundsEnabled(value);
+   try{await setPreference('sounds',value);}
+   catch(e){setPrefs(prev=>({...prev,sounds:previous}));setSoundsEnabled(previous);showError('Não foi possível salvar',e);}
+ }
+ async function changeMoodNotices(value:boolean){
+   const previous=prefs.moodNotices;
+   setPrefs(prev=>({...prev,moodNotices:value}));
+   try{await setPreference('moodNotices',value);await syncMoodNotices();}
+   catch(e){setPrefs(prev=>({...prev,moodNotices:previous}));showError('Não foi possível salvar',e);}
  }
  function confirmDelete(){
    showDialog({eyebrow:'PING / EXCLUSÃO',title:'Apagar todas as tarefas?',message:'Essa ação exclui permanentemente todas as tarefas e cancela seus lembretes. Não é possível desfazer.',cancelLabel:'CANCELAR',confirmLabel:'APAGAR TUDO',destructive:true,onConfirm:async()=>{
@@ -164,10 +178,14 @@ export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
    <Text style={s.section}>MOVIMENTO</Text>
    <View style={s.panel}>
      <View style={s.row}><View style={s.copy}><Text style={s.title}>Animações do Ping</Text><Text style={s.detail}>Pulinhos, risquinhos e reações ao concluir tarefas. Desligue se preferir o app mais quieto.</Text></View><Switch value={prefs.animations} onValueChange={changeAnimations} trackColor={{false:c.border,true:c.accentSoft}} thumbColor={prefs.animations?c.accent:c.muted}/></View>
+     <View style={s.separator}/>
+     <View style={s.row}><View style={s.copy}><Text style={s.title}>Sons do Ping</Text><Text style={s.detail}>Dings, bocejos e outros sons do Ping dentro do app. Respeitam o modo silencioso do celular.</Text></View><Switch value={prefs.sounds} onValueChange={changeSounds} trackColor={{false:c.border,true:c.accentSoft}} thumbColor={prefs.sounds?c.accent:c.muted}/></View>
    </View>
    <Text style={s.section}>NOTIFICAÇÕES</Text>
    <View style={s.panel}>
      <View style={s.row}><View style={s.copy}><Text style={s.title}>Lembretes ativos</Text><Text style={s.detail}>Ative ou pause os avisos de tarefas.</Text></View><Switch disabled={busy} value={prefs.notifications} onValueChange={v=>change('notifications',v)} trackColor={{false:c.border,true:c.accentSoft}} thumbColor={prefs.notifications?c.accent:c.muted}/></View>
+     <View style={s.separator}/>
+     <View style={s.row}><View style={s.copy}><Text style={s.title}>Saudade e dia limpo</Text><Text style={s.detail}>O Ping avisa quando você some por 3 dias com tarefas esperando e às 20h quando o dia termina limpo.</Text></View><Switch disabled={busy||!prefs.notifications} value={prefs.moodNotices&&prefs.notifications} onValueChange={changeMoodNotices} trackColor={{false:c.border,true:c.accentSoft}} thumbColor={prefs.moodNotices&&prefs.notifications?c.accent:c.muted}/></View>
      <View style={s.separator}/>
      <View style={s.row}><View style={s.copy}><Text style={s.title}>Ocultar detalhes</Text><Text style={s.detail}>Não mostrar o nome da tarefa no título ou corpo das novas notificações.</Text></View><Switch disabled={busy} value={prefs.privatePreviews} onValueChange={v=>change('privatePreviews',v)} trackColor={{false:c.border,true:c.accentSoft}} thumbColor={prefs.privatePreviews?c.accent:c.muted}/></View>
      <View style={s.separator}/>

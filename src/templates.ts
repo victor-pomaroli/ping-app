@@ -9,6 +9,7 @@ export const categoryEmoji: Record<TaskCategory, string> = {
 };
 export type ReminderStage = 0 | 1 | 2 | 3;
 import type {AddressStyle,NotificationPersonality} from './preferences';
+import type {NotificationMood} from './faces';
 const templates:Record<TaskCategory,Record<ReminderStage,readonly string[]>>={
  study:{0:['O conhecimento não vai entrar na cabeça por Bluetooth. 📚','Seu cérebro pediu férias, mas a matéria não.'],1:['A matéria segue esperando. Ela tem mais paciência que eu. 👀','15 minutos de atraso. A sabedoria não vem por osmose.'],2:['Uma hora depois e os livros continuam fechados.','A matéria ainda está aí. Surpresa nenhuma.'],3:['Última chamada dos estudos. Vai encarar ou reagendar?']},
  work:{0:['Seu eu do passado marcou um compromisso. Hora de honrar o combinado.','Tem tarefa do trabalho te chamando. E não é reunião que poderia ser e-mail.'],1:['A responsabilidade bateu de novo. Vai atender?','A tarefa continua na agenda, {vocativo}.'],2:['Uma hora depois e essa pendência ainda tem seu nome.','O relógio trabalhou. E essa tarefa?'],3:['Último toque: resolve ou reorganiza o prazo.']},
@@ -126,4 +127,57 @@ export function eventReminderMessage(category:TaskCategory,minutesBefore:number,
  const tempo=personality==='semPaciencia'&&category!=='health'?eventLeadText(minutesBefore).toUpperCase():eventLeadText(minutesBefore);
  const template=options[Math.abs(variant)%options.length].replace(/\{tempo\}/g,tempo);
  return personalize(template,variant+minutesBefore,displayName,addressStyle);
+}
+
+// ─── Sentimento do Ping ──────────────────────────────────────────────────────
+// Texto por sentimento e personalidade (Saúde continua neutra e usa os textos acima).
+type TaskMood='animado'|'impaciente'|'irritado'|'cansado';
+const moodTemplates:Record<NotificationPersonality,Record<TaskMood,readonly string[]>>={
+ debochado:{
+  animado:['Seu eu do passado marcou isso. Eu só lembrei.','Chegou a hora. Eu lembrei, você faz. Combinado?','Tá na agenda, {vocativo}. Eu não inventei nada.'],
+  impaciente:['Uma hora depois. Eu não tô julgando. Tô, sim.','Uma hora e a pendência segue firme. Surpresa nenhuma.','O relógio trabalhou. E essa tarefa?'],
+  irritado:['Três horas. Já aprendi a esperar, mas cansei de aprender.','Última chamada, {vocativo}: faz ou reagenda.','Isso já tem mais atraso que desculpa. Resolve?'],
+  cansado:['Já adiou várias vezes. Meu sino tá exausto de tocar.','Adiar de novo? Meu sino pede férias.','{vocativo}, a gente podia reagendar de vez, né?'],
+ },
+ semPaciencia:{
+  animado:['É AGORA! Bora tirar isso da frente.','CHEGOU A HORA, {vocativo}! Nada de empurrar.','TEM TAREFA! Faz agora, depois descansa.'],
+  impaciente:['UMA HORA! A tarefa ainda tá aí.','UMA HORA DEPOIS! Ela não criou pernas.','O tempo passou. AGORA É DECIDIR!'],
+  irritado:['TRÊS HORAS! Faz ou reagenda. SEM ENROLAR.','ÚLTIMO AVISO, {vocativo}! Resolve ou muda o prazo.','ISSO ESTÁ VENCIDO! Anda!'],
+  cansado:['Adiou de novo. CANSEI. Decide: faz ou reagenda.','Adiar, adiar... Chega! Faz ou reagenda.','Já adiou demais. Reagenda de vez ou faz.'],
+ },
+ deBoa:{
+  animado:['Chegou a hora, no seu ritmo. Um passo de cada vez. 🌿','Um lembrete gentil: a tarefa chegou.','Passando para lembrar do que você planejou.'],
+  impaciente:['Ela continua aqui, sem pressão. Quando puder.','Já faz um tempinho. Que tal um pouquinho agora?','Sem pressa, mas ela continua te esperando.'],
+  irritado:['Faz um tempinho. Quer fazer agora ou reagendar com calma?','Se o dia apertou, dá para reagendar sem culpa.','Último lembrete: faz quando puder ou reagenda.'],
+  cansado:['Você adiou algumas vezes. Talvez esse horário não sirva. Reagendar?','Que tal um horário melhor para essa tarefa?','Tudo bem adiar. Mas um novo horário ajuda. Reagendar?'],
+ },
+};
+/** Mensagem de lembrete de tarefa conforme o sentimento do Ping (Saúde cai nos textos neutros por etapa). */
+export function moodMessage(category:TaskCategory,mood:NotificationMood,stage:ReminderStage,variant=0,displayName='',addressStyle:AddressStyle='neutral',personality:NotificationPersonality='debochado'){
+ if(category==='health'||mood==='ciumes'||mood==='festa')return reminderMessage(category,stage,variant,displayName,addressStyle,personality);
+ const options=moodTemplates[personality][mood];
+ const base=personalize(options[Math.abs(variant)%options.length],variant+stage,displayName,addressStyle);
+ // O primeiro aviso leva o emoji do assunto (como os textos antigos); os outros ficam mais secos.
+ return mood==='animado'&&category!=='general'?`${base} ${categoryEmoji[category]}`:base;
+}
+const missTemplates:Record<NotificationPersonality,readonly string[]>={
+ debochado:['Sumiu, hein? Tem {n} esperando. Tô bem. Tô ótimo.','{dias} dias sem aparecer. Tem {n} esperando. Sem pressão. Quase.'],
+ semPaciencia:['SUMIU {dias} DIAS! Tem {n} esperando. Abre aí.','Tem {n} esperando há {dias} dias. VOLTA AQUI!'],
+ deBoa:['Que saudade! Tem {n} esperando, sem pressa.','Faz {dias} dias… tudo bem por aí? Tem {n} esperando.'],
+};
+const cleanDayTemplates:Record<NotificationPersonality,readonly string[]>={
+ debochado:['Tudo feito hoje. Quem diria. Vou me gabar por você. 🔔','Dia limpo. Posso fingir que sempre acreditei.'],
+ semPaciencia:['Tudo feito. Pronto. Sem drama.','Dia limpo. Amanhã tem mais. Descansa.'],
+ deBoa:['Que dia bom! Tudo feito. Pode descansar. 🌿','Missão cumprida. Aproveita a noite!'],
+};
+const countText=(n:number)=>n===1?'1 tarefa':`${n} tarefas`;
+/** Aviso de saudade: depois de dias sem abrir o app, com tarefas esperando. */
+export function missYouMessage(personality:NotificationPersonality,pending:number,days:number,variant=0){
+ const options=missTemplates[personality];
+ return options[Math.abs(variant)%options.length].replace(/\{n\}/g,countText(pending)).replace(/\{dias\}/g,String(days));
+}
+/** Aviso opcional das 20h quando o dia terminou sem nada pendente. */
+export function cleanDayMessage(personality:NotificationPersonality,variant=0){
+ const options=cleanDayTemplates[personality];
+ return options[Math.abs(variant)%options.length];
 }

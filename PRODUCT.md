@@ -44,7 +44,8 @@ Assuntos: Estudos, Trabalho, Finanças, Casa, Saúde e Geral. Cada um tem cor pr
 - **Rotinas:** um aviso por dia, no horário escolhido.
 - **Eventos:** os avisos escolhidos antes do início.
 - **Silêncio entre 22h e 7h.**
-- Botões direto na notificação: **Concluir** e **Adiar 15 min** (eventos: **Lembrar em 10 min**). Tocar na notificação abre o app na aba Hoje com a tarefa destacada.
+- Botões direto na notificação: **Concluir** e **Adiar 15 min** (eventos: **Lembrar em 10 min**). Depois do 2º adiamento o Ping fica cansado e o segundo botão vira **Reagendar** (abre a tarefa). Tocar na notificação abre o app na aba Hoje com a tarefa destacada.
+- **Sentimento do Ping:** o rosto, a cor, o texto, o estado no cabeçalho ("Ping · impaciente") e o som mudam conforme o sentimento: *animado* (na hora), *impaciente* (+1 h), *irritado* (+3 h ou 3+ atrasadas), *cansado* (adiou 2+ vezes), *com saudade* (3 dias sem abrir o app, com tarefas esperando) e *orgulhoso* (aviso das 20h quando o dia fica limpo). Os dois últimos podem ser desligados em Ajustes. Há três tons de som (normal, urgente e calmo), um canal do Android para cada.
 - **Personalidades:** 😏 *Debochado* (ironia na medida certa), 🔥 *Sem Paciência* (direto e sem enrolação) e 🌿 *De Boa* (leve e tranquilo).
 - **Privacidade:** opção de ocultar o nome da tarefa nas notificações.
 
@@ -56,7 +57,7 @@ Um widget de tela inicial com as próximas tarefas e as concluídas do dia, no m
 
 - **Primeiro uso:** um onboarding de 4 passos (nome, forma de tratamento, personalidade e tema).
 - **Temas:** escuro original (verde-limão sobre carvão), claro suave, rosa chiclete (claro) e azul noturno (escuro). Cada um muda o app inteiro, os diálogos, o widget e o papel da nota de resumo.
-- **Ajustes:** nome, tratamento, personalidade, tema, animações do Ping, lembretes ativos ou pausados, privacidade, teste de notificação, diagnóstico dos lembretes programados, permissões do Android e "apagar todas as tarefas".
+- **Ajustes:** nome, tratamento, personalidade, tema, animações e sons do Ping, lembretes ativos ou pausados, privacidade, teste de notificação, diagnóstico dos lembretes programados, permissões do Android e "apagar todas as tarefas".
 - **Histórico:** concluídas há mais de 30 dias são arquivadas automaticamente e podem ser restauradas.
 
 ## Princípios de design

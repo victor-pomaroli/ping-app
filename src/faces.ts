@@ -10,6 +10,20 @@ import type {TaskCategory} from './templates';
  * com o mesmo nome; a notificação aponta para eles por `data.largeIcon`.
  */
 export type FaceMoment='no_horario'|'atraso_1h'|'atraso_3h';
+/**
+ * O sentimento do Ping numa notificação (vai além do atraso): animado (na hora), impaciente (+1 h), irritado (+3 h
+ * ou muitas atrasadas), cansado (adiou várias vezes), com saudade (dias sem abrir o app) e orgulhoso (dia limpo).
+ * Os três primeiros usam os arquivos `no_horario`, `atraso_1h` e `atraso_3h`; os outros têm arquivo próprio.
+ */
+export type NotificationMood='animado'|'impaciente'|'irritado'|'cansado'|'ciumes'|'festa';
+const MOOD_FILE:Record<NotificationMood,string>={animado:'no_horario',impaciente:'atraso_1h',irritado:'atraso_3h',cansado:'cansado',ciumes:'ciumes',festa:'festa'};
+/** A silhueta da barra de status só tem três versões (sorrindo, sério, exclamação). */
+const MOOD_ICON:Record<NotificationMood,FaceMoment>={animado:'no_horario',impaciente:'atraso_1h',irritado:'atraso_3h',cansado:'atraso_1h',ciumes:'atraso_1h',festa:'no_horario'};
+const MOOD_COLORS:Record<NotificationPersonality,Record<NotificationMood,string>>={
+  debochado:{animado:'#9BE82E',impaciente:'#FFC92E',irritado:'#FF9426',cansado:'#FFC92E',ciumes:'#FFC92E',festa:'#9BE82E'},
+  semPaciencia:{animado:'#FFD23A',impaciente:'#FF6A3A',irritado:'#FF3B3B',cansado:'#FF6A3A',ciumes:'#FF6A3A',festa:'#FFD23A'},
+  deBoa:{animado:'#7EECB0',impaciente:'#5FBCF2',irritado:'#98AEF5',cansado:'#5FBCF2',ciumes:'#5FBCF2',festa:'#7EECB0'},
+};
 const PREFIX:Record<NotificationPersonality,string>={debochado:'debochado',semPaciencia:'sem_paciencia',deBoa:'de_boa'};
 /** Cor de destaque da notificação (ícone pequeno e nome do app), tirada de cada sino. */
 const COLORS:Record<NotificationPersonality,Record<FaceMoment,string>>={
@@ -29,6 +43,11 @@ export function faceMoment(stage:number):FaceMoment{
 export function notificationFace(personality:NotificationPersonality,moment:FaceMoment,category?:TaskCategory){
   if(category==='health')return null;
   return {largeIcon:`ping_face_${PREFIX[personality]}_${moment}`,smallIcon:`ping_notif_${moment}`,color:COLORS[personality][moment]};
+}
+/** Rosto, ícone pequeno e cor para um sentimento do Ping (Saúde continua sem rosto). */
+export function moodFace(personality:NotificationPersonality,mood:NotificationMood,category?:TaskCategory){
+  if(category==='health')return null;
+  return {largeIcon:`ping_face_${PREFIX[personality]}_${MOOD_FILE[mood]}`,smallIcon:`ping_notif_${MOOD_ICON[mood]}`,color:MOOD_COLORS[personality][mood]};
 }
 
 /** As mesmas imagens para mostrar dentro do app (Ajustes, onboarding). */

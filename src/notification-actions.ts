@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
-import {ACTION_COMPLETE,ACTION_SNOOZE} from './notifications';
+import {ACTION_COMPLETE,ACTION_RESCHEDULE,ACTION_SNOOZE} from './notifications';
 import {getMeta,setMeta} from './preferences';
 
 export const BACKGROUND_NOTIFICATION_TASK='ping-notification-actions';
@@ -27,7 +27,8 @@ export async function handleNotificationResponse(response:Notifications.Notifica
   const taskId=taskIdOf(response);
   if(taskId===null)return null;
   const action=response.actionIdentifier;
-  if(action===Notifications.DEFAULT_ACTION_IDENTIFIER)return taskId;
+  // "Reagendar" (Ping cansado) abre o app na tarefa, como um toque na notificação.
+  if(action===Notifications.DEFAULT_ACTION_IDENTIFIER||action===ACTION_RESCHEDULE)return taskId;
   const key=response.notification.request.identifier+':'+action;
   if(await getMeta('lastNotificationResponse')===key)return null;
   await setMeta('lastNotificationResponse',key);

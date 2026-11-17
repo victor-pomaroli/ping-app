@@ -8,6 +8,7 @@ import {useAppTheme,ThemeColors,categoryColors,priorityColors,isDarkAppearance} 
 import {PingDialog} from '../src/components/PingDialog';
 import {CalendarScreen} from '../src/components/CalendarScreen';
 import {SummaryNote} from '../src/components/SummaryNote';
+import {noteTouch} from '../src/ping-activity';
 import {TaskTitle} from '../src/components/TaskTitle';
 import {sortTasks,sectionTasks} from '../src/task-order';
 import {EventCard} from '../src/components/EventCard';
@@ -313,7 +314,7 @@ export default function Home(){
       ]).start(()=>setHighlight(h=>h&&h.id===root.id?null:h));
     },450);
   },[highlightRequest,tasks]);
-  return <View style={s.root}>
+  return <View style={s.root} onTouchStart={e=>noteTouch(e.nativeEvent.pageX,e.nativeEvent.pageY)} onTouchMove={e=>noteTouch(e.nativeEvent.pageX,e.nativeEvent.pageY)}>
     <PingDialog visible={!!deleteTarget} eyebrow="PING / EXCLUSÃO" title="Vai apagar mesmo?" message={deleteTarget?`“${deleteTarget.title}” será excluída de vez. Essa ação não pode ser desfeita.`:undefined} confirmLabel="EXCLUIR" cancelLabel="MANTER" destructive busy={busyDelete} onClose={()=>{if(!busyDelete)setDeleteTarget(null);}} onConfirm={confirmDelete}/>
     <PingDialog visible={!!feedback} eyebrow="PING / OPS" title={feedback?.title??''} message={feedback?.message} confirmLabel="FECHAR" onClose={()=>setFeedback(null)} onConfirm={()=>setFeedback(null)}/>
     <StatusBar barStyle={isDarkAppearance(appearance)?"light-content":"dark-content"}/>

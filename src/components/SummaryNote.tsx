@@ -56,7 +56,9 @@ export function SummaryNote({appearance,page,left,overdue,today,done,celebrateKe
     {scale:lift.interpolate({inputRange:[0,1],outputRange:[1,1.04]})},
     {rotate:wobble.interpolate({inputRange:[-1,1],outputRange:['-5deg','5deg']})},
   ]};
-  return <View>
+  // O Ping fica dentro dos limites desta View (padding no topo, compensado por margem negativa): no Android um toque fora
+  // dos limites do pai não chega ao filho, e era por isso que o Ping às vezes não respondia na parte que sobe acima do papel.
+  return <View pointerEvents="box-none" style={{paddingTop:PING_SIZE-PING_PERCH,marginTop:-(PING_SIZE-PING_PERCH)}}>
   <Animated.View style={[look.wrap,motion]}>
     {binder?<View pointerEvents="none" style={[dark.tape,{backgroundColor:bc.tape}]}/>:null}
     <View style={[look.sheet,binder&&{backgroundColor:look.paper}]}>
@@ -80,7 +82,7 @@ export function SummaryNote({appearance,page,left,overdue,today,done,celebrateKe
     </View>
   </Animated.View>
   {/* O Ping fica por cima do post-it, no canto superior direito (onde o papel está vazio): o papel mantém o tamanho de antes. */}
-  <View pointerEvents="box-none" style={{position:'absolute',right:-6,top:-(PING_SIZE-PING_PERCH),width:PING_COLUMN,height:PING_SIZE,zIndex:10,overflow:'visible'}}>
+  <View pointerEvents="box-none" style={{position:'absolute',right:-6,top:0,width:PING_COLUMN,height:PING_SIZE,zIndex:10,overflow:'visible'}}>
     <PingMascot personality={personality} left={left} overdue={overdue} done={done} active={active} celebrateKey={celebrateKey} completeKey={completeKey} refreshKey={refreshKey}/>
   </View>
   </View>;

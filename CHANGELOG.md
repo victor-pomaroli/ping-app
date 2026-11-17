@@ -21,6 +21,27 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.7.0] — 2026-11-16
+
+### Adicionado
+- **Cansaço do Ping:** tocar várias vezes seguidas o cansa. Ele pesa as pálpebras, sua, boceja e, no extremo, fica tonto (olhos em espiral e estrelinhas); quando você para, descansa, respira fundo e avisa. A fala não reinicia mais a cada toque: durante o balão, os toques só mexem o corpo.
+- **Novos comportamentos:** cochila depois de 20 s sem toque na tela (Zzz) e acorda com susto; dança com confete ao concluir tarefas; espia ao puxar para atualizar; fica amuado ao voltar depois de 3 dias; segurar o dedo o infla e solta um DING com ondas; os olhos seguem o dedo; uma nuvem de chuva aparece com 3 ou mais atrasadas.
+- **Sons do Ping** (expo-audio): dings de toque que ficam mais graves com o cansaço, piado por personalidade, bocejo, susto, festa, DING grande e mais. Respeitam o modo silencioso e há um interruptor em Ajustes.
+- **Sentimento nas notificações:** seis humores (animado, impaciente, irritado, cansado, com saudade, orgulhoso) com rosto, cor, texto, estado no cabeçalho e linha de contexto (atraso, atrasadas hoje, adiamentos, subtarefas). Eventos e rotinas diárias também ganham rosto. Depois do 2º adiamento o botão "Adiar" vira "Reagendar".
+- **Avisos de saudade** (3 dias sem abrir o app, com tarefas esperando) e **de dia limpo** (20h), desligáveis em Ajustes.
+- **Três tons de som das notificações** (normal, urgente, calmo), cada um em seu canal do Android. O teste em Ajustes manda um aviso de cada sentimento.
+- Fonte **Baloo 2 Bold** nos balões do Ping.
+
+### Alterado
+- Os 9 rostos das notificações foram refeitos a partir do Ping vetorial e há 9 novos (cansado, saudade, orgulhoso).
+- A pálpebra do Ping é recortada no formato do olho: nenhum olho aparece por cima dela e o brilho do corpo não é coberto.
+
+### Corrigido
+- O Ping às vezes não respondia ao toque: a parte dele que sobe acima do post-it ficava fora dos limites do componente pai no Android.
+
+### Observação
+- Os canais de notificação antigos foram apagados e substituídos pelos três novos; se você tinha mudado som ou vibração do canal, precisa ajustar de novo.
+
 ## [1.6.1] — 2026-11-16
 
 ### Alterado

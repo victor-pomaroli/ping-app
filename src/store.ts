@@ -2,7 +2,8 @@ import * as SQLite from 'expo-sqlite';
 import {getPreferences,getMeta,setMeta} from './preferences';
 import {reminderOffsets} from './templates';
 import {TaskCategory} from './templates';
-import {SNOOZE_STAGE,cancelOrphanNotifications,cancelTaskReminders,scheduleTaskReminders,scheduleSnoozeReminder,scheduleEventAlerts,scheduleEventSnooze,dismissTaskNotifications,dismissAllTaskNotifications,ScheduledReminder} from './notifications';
+import {SNOOZE_STAGE,cancelOrphanNotifications,cancelTaskReminders,scheduleTaskReminders,scheduleSnoozeReminder,scheduleEventAlerts,scheduleEventSnooze,dismissTaskNotifications,dismissAllTaskNotifications,scheduleMoodNotice,ScheduledReminder,ReminderContext} from './notifications';
+import {MANY_OVERDUE} from './ping-mood';
 export type Task={id:number;title:string;description:string;due_at:number;priority:'low'|'medium'|'high';category:TaskCategory;completed:number;completed_at:number|null;archived_at:number|null;notification_id:string|null;parent_id:number|null;daily:number;daily_active:number;daily_day:string|null;no_due:number;kind:TaskKind;ends_at:number|null;location:string;alert_offsets:string};
 /** `kind`: 'task' (tarefa) ou 'event' (evento com hora marcada, avisado antes de acontecer). */
 export type TaskKind='task'|'event';
@@ -159,7 +160,7 @@ async function replaceReminders(id:number,task:Pick<TaskInput,'title'|'due_at'|'
   if(current?.parent_id || current?.no_due || (current?.daily && !current.daily_active) || (completed && !current?.daily))return;
   const scheduled=current?.kind==='event'
     ?await scheduleEventAlerts({id,title:current.title,due_at:current.due_at,category:current.category,location:current.location,offsets:eventOffsets(current)})
-    :await scheduleTaskReminders({id,title:task.title,due_at:task.due_at,category:task.category,daily:!!current?.daily,subtasks:await subtaskProgress(id)});
+    :await scheduleTaskReminders({id,title:task.title,due_at:task.due_at,category:task.category,daily:!!current?.daily,subtasks:await subtaskProgress(id)},current?await moodContext(current):undefined);
   try{
     for(const item of scheduled)await db.runAsync(
       'INSERT INTO task_notifications(notification_id,task_id,stage,scheduled_at) VALUES(?,?,?,?)',
@@ -285,6 +286,7 @@ export async function syncTaskCompletion(task:Task,completed:boolean){
   }
   await replaceReminders(task.id,task,completed);
   if(completed)await dismissTaskNotifications(task.id);
+  await syncMoodNotices().catch(console.warn);
 }
 export async function completeTask(id:number,completed:boolean){
   const task=await setTaskCompleted(id,completed);
@@ -303,7 +305,7 @@ export async function snoozeTask(id:number){
   await db.runAsync('DELETE FROM task_notifications WHERE task_id=? AND stage=?',id,SNOOZE_STAGE);
   const snoozed=task.kind==='event'
     ?await scheduleEventSnooze({id,title:task.title,due_at:task.due_at,category:task.category,location:task.location,offsets:[]})
-    :await scheduleSnoozeReminder({id,title:task.title,due_at:task.due_at,category:task.category,subtasks:await subtaskProgress(id)});
+    :await scheduleSnoozeReminder({id,title:task.title,due_at:task.due_at,category:task.category,subtasks:await subtaskProgress(id)},{snoozes:await bumpSnooze(task),overdueToday:await overdueTodayCount()});
   if(snoozed)await db.runAsync('INSERT INTO task_notifications(notification_id,task_id,stage,scheduled_at) VALUES(?,?,?,?)',snoozed.notification_id,id,snoozed.stage,snoozed.scheduled_at);
 }
 export async function deleteTask(id:number,parentGoing=false){
@@ -322,7 +324,66 @@ export async function deleteTask(id:number,parentGoing=false){
   if(parent)await replaceReminders(parent.id,parent,!!parent.completed).catch(console.warn);
   await refreshWidget();
 }
-const REMINDER_CONTENT_VERSION='3-icons';
+const REMINDER_CONTENT_VERSION='4-moods';
+/** Adiamentos desta tarefa (voltam a zero quando o horário muda). */
+async function snoozeCount(task:Pick<Task,'id'|'due_at'>){
+  const saved=await getMeta('snoozes:'+task.id);
+  if(!saved)return 0;
+  const [due,count]=saved.split(':');
+  return Number(due)===task.due_at?Number(count)||0:0;
+}
+async function bumpSnooze(task:Pick<Task,'id'|'due_at'>){
+  const count=(await snoozeCount(task))+1;
+  await setMeta('snoozes:'+task.id,`${task.due_at}:${count}`);
+  return count;
+}
+/** Quantas tarefas (não eventos) estão atrasadas agora. */
+async function overdueTodayCount(){
+  const db=await ready;
+  const row=await db.getFirstAsync<{n:number}>("SELECT COUNT(*) AS n FROM tasks WHERE parent_id IS NULL AND completed=0 AND no_due=0 AND kind='task' AND archived_at IS NULL AND (daily=0 OR daily_active=1) AND due_at<?",Date.now());
+  return row?.n??0;
+}
+async function moodContext(task:Pick<Task,'id'|'due_at'>):Promise<ReminderContext>{
+  return {snoozes:await snoozeCount(task),overdueToday:await overdueTodayCount()};
+}
+/**
+ * Humor dos avisos: quando as atrasadas cruzam 3 (para mais ou para menos) os avisos futuros são reagendados,
+ * porque o sentimento do Ping muda (irritado). Também refaz os avisos de saudade e de dia limpo.
+ */
+export async function refreshMoodState(){
+  const prefs=await getPreferences();
+  if(!prefs.notifications)return;
+  const signature=(await overdueTodayCount())>=MANY_OVERDUE?'hot':'calm';
+  if(await getMeta('moodSig')!==signature){await rescheduleAllReminders();await setMeta('moodSig',signature);}
+  await syncMoodNotices();
+}
+const MISS_DAYS=3;
+/**
+ * Saudade: um aviso 3 dias depois da última abertura (às 10h), se houver tarefas esperando.
+ * Dia limpo: um aviso às 20h se hoje terminou sem nada pendente e com algo concluído.
+ * Os dois são trocados a cada chamada; os antigos são cancelados pelo `kind` 'mood_notice'.
+ */
+export async function syncMoodNotices(){
+  const Notifications=await import('expo-notifications');
+  const scheduled=await Notifications.getAllScheduledNotificationsAsync();
+  await cancelTaskReminders(scheduled.filter(n=>n.content.data?.kind==='mood_notice').map(n=>n.identifier));
+  const prefs=await getPreferences();
+  if(!prefs.notifications||!prefs.moodNotices)return;
+  const db=await ready;const now=Date.now();
+  const base="parent_id IS NULL AND completed=0 AND no_due=0 AND kind='task' AND archived_at IS NULL AND (daily=0 OR daily_active=1)";
+  const pending=(await db.getFirstAsync<{n:number}>(`SELECT COUNT(*) AS n FROM tasks WHERE ${base}`))?.n??0;
+  if(pending>0){
+    const at=new Date(now+MISS_DAYS*86400000);at.setHours(10,0,0,0);
+    await scheduleMoodNotice('ciumes',at.getTime(),{pending,days:MISS_DAYS});
+  }
+  const endOfToday=new Date();endOfToday.setHours(23,59,59,999);
+  const left=(await db.getFirstAsync<{n:number}>(`SELECT COUNT(*) AS n FROM tasks WHERE ${base} AND due_at<=?`,endOfToday.getTime()))?.n??0;
+  const doneToday=(await db.getFirstAsync<{n:number}>("SELECT COUNT(*) AS n FROM tasks WHERE parent_id IS NULL AND completed=1 AND completed_at>=?",startOfToday()))?.n??0;
+  if(left===0&&doneToday>0){
+    const at=new Date();at.setHours(20,0,0,0);
+    await scheduleMoodNotice('festa',at.getTime(),{pending:0});
+  }
+}
 export async function reconcileReminders(){
   await syncDailyTasks();
   const db=await ready;

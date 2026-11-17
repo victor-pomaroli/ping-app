@@ -6,8 +6,8 @@ import type {NotificationPersonality} from './preferences';
  * Frases curtas (cabem em duas linhas no balão) e sem repetir os textos que o app já tem.
  */
 export type DayMood='devendo'|'falta_pouco'|'ainda_hoje'|'cumprida'|'vazio';
-/** Além do humor do dia: logo depois de concluir uma tarefa e quando o Ping é cutucado. */
-export type Situation=DayMood|'concluiu'|'toque';
+/** Além do humor do dia: ao concluir, ao ser cutucado (e cansar), ao acordar, ao atualizar, ao voltar depois de dias, ao tocar o sino e com muitas atrasadas. */
+export type Situation=DayMood|'concluiu'|'toque'|'cansado'|'tonto'|'recuperou'|'soneca'|'espiar'|'ciumes'|'sino'|'nuvem';
 
 /** Mesmo critério do rótulo do post-it (TÁ DEVENDO, FALTA POUCO, AINDA HOJE, MISSÃO CUMPRIDA, DIA EM BRANCO). */
 export function dayMood(left:number,overdue:number,done:number):DayMood{
@@ -25,6 +25,14 @@ const LINES:Record<NotificationPersonality,Record<Situation,string[]>>={
     vazio:['Dia em branco. Ambicioso.','Nada pra hoje. Suspeito.','Toca no + e finge produtividade.'],
     concluiu:['Olha só, funcionou.','Uma a menos. Continue assim.','Gostei. Nem vou comentar.'],
     toque:['Tá me cutucando por quê?','Eu vejo tudo, sabia?','Vai trabalhar, vai.'],
+    cansado:['O dedo cansou? Eu já.','Quantos cutucões. Dá um tempo.','Já deu, né?'],
+    tonto:['Estrelinhas. Que chique.','Para. Tô girando.'],
+    recuperou:['Ok. Voltei. Sem graça.','Respirei. Pode seguir.'],
+    soneca:['Eu tava só descansando a vista.','Tava pensando. De olho fechado.'],
+    espiar:['Deixa eu ver se tem novidade…','Procurando novidade. Boa sorte.'],
+    ciumes:['Olha só quem apareceu.','Sumiu, hein? Tô bem. Tô ótimo.'],
+    sino:['DING! Satisfeito?','Quer barulho? Toma.'],
+    nuvem:['Tá chovendo atraso aqui.','Nublou. Culpa de quem?'],
   },
   semPaciencia:{
     devendo:['Atrasou. Resolve agora.','Chega de enrolar.','Isso tá vencido. Anda.'],
@@ -34,6 +42,14 @@ const LINES:Record<NotificationPersonality,Record<Situation,string[]>>={
     vazio:['Sem tarefa. Cria uma.','Dia vazio. Planeja algo.','Nada aqui. Toca no +.'],
     concluiu:['Uma a menos. Próxima.','Boa. Não para.','Feito. Segue.'],
     toque:['Não é hora de brincar.','Larga o dedo. Trabalha.','Tá fazendo o quê aqui?'],
+    cansado:['Chega. Cansei.','Para de cutucar.','Isso cansa, sabia?'],
+    tonto:['Para. Agora.','Tô tonto. Sério.'],
+    recuperou:['Pronto. Não repete.','Voltei. Foco.'],
+    soneca:['Ei! Eu tava dormindo!','Que susto! Para!'],
+    espiar:['Atualizando. Rápido.','Vamos ver o que sobrou.'],
+    ciumes:['Sumiu. Pois é.','Já era hora.'],
+    sino:['DING! Alto o bastante?','Escutou? Agora faz.'],
+    nuvem:['Chuva de atraso. Resolve.','Isso tá virando tempestade.'],
   },
   deBoa:{
     devendo:['Tem uns atrasos. Sem estresse.','Dá pra resolver no seu ritmo.','Respira. Uma de cada vez.'],
@@ -43,6 +59,14 @@ const LINES:Record<NotificationPersonality,Record<Situation,string[]>>={
     vazio:['Dia livre. Que delícia.','Nada pra hoje. Aproveita.','Se quiser criar algo, o + tá aí.'],
     concluiu:['Boa! Mais uma feita.','Isso aí, no seu tempo.','Tranquilo e eficiente.'],
     toque:['Oi! Tá tudo bem por aí?','Cócegas! Hihi.','Tô de olho, mas de boa.'],
+    cansado:['Ai, preciso de um respiro…','Calma, tô cansadinho.','Uma pausa, por favor?'],
+    tonto:['Tô girando… hihi.','Uau, tudo rodando…'],
+    recuperou:['Ahh, melhor. Valeu!','Respirei fundo. Bora.'],
+    soneca:['Ai! Que susto… oi!','Hm? Eu cochilei?'],
+    espiar:['Vamos ver as novidades?','Buscando… tudo certo!'],
+    ciumes:['Ei, que saudade! Hmpf.','Demorou, hein? Senti falta.'],
+    sino:['DIIING! Que gostoso!','Bimbalhei! Hihi.'],
+    nuvem:['Eita, nublou. Bora limpar?','Uns atrasos chovendo… a gente resolve.'],
   },
 };
 

@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ping",
     "slug": "ping",
-    "version": "1.6.1",
+    "version": "1.7.0",
     "scheme": "ping",
     "icon": "./assets/icon.png",
     "plugins": [
@@ -14,7 +14,12 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#D7FC65",
-          "defaultChannel": "tasks-feedback-v2"
+          "defaultChannel": "ping-tom-normal-v1",
+          "sounds": [
+            "./assets/notification-sounds/ping_notif_normal.wav",
+            "./assets/notification-sounds/ping_notif_urgent.wav",
+            "./assets/notification-sounds/ping_notif_calm.wav"
+          ]
         }
       ],
       [
@@ -38,7 +43,7 @@
     ],
     "android": {
       "package": "com.example.ping",
-      "versionCode": 10601,
+      "versionCode": 10700,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#10301B"
