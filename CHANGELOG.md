@@ -21,6 +21,13 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.9.1] — 2026-11-17
+
+### Alterado
+- **Sequência redesenhada:** vira um post-it acima do seletor de mês, com o número grande (Baloo 2), recorde, quanto falta para o próximo marco e os últimos 7 dias. O papel acompanha o tema (lima, manteiga, rosa e ciano).
+- **Ícones próprios no lugar dos emojis:** uma chama em três estados, acesa e colorida (tudo feito), pela metade (parte) e apagada tracejada (nada). Vale no post-it, no calendário e na legenda.
+- Legenda do calendário em uma linha só.
+
 ## [1.9.0] — 2026-11-17
 
 ### Adicionado

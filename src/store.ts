@@ -577,9 +577,16 @@ async function loadScores(){
   return new Map(rows.map(r=>[r.day,{planned:r.planned,done:r.done}]));
 }
 /** Sequência atual, melhor sequência e situação de hoje. */
-export async function getStreakInfo():Promise<StreakInfo>{
+export type StreakView=StreakInfo&{recent:{day:string;score:DayScore|null}[]};
+/** `recent`: os últimos 7 dias (o último é hoje, com a pontuação ao vivo). */
+export async function getStreakInfo():Promise<StreakView>{
   await closeDays();
-  return streakInfo(await loadScores(),localDay(),await todayScore());
+  const scores=await loadScores(),today=await todayScore(),key=localDay();
+  const recent=Array.from({length:7},(_,i)=>{
+    const day=dayKeyAdd(key,i-6);
+    return {day,score:i===6?today:scores.get(day)??null};
+  });
+  return {...streakInfo(scores,key,today),recent};
 }
 /** Tamanho da sequência (≥3) que o dia de ontem quebrou, para o Ping reagir uma vez; 0 se não quebrou. */
 export async function getBrokenStreak():Promise<number>{

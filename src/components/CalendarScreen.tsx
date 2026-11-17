@@ -1,8 +1,10 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {View,Text,Pressable,ActivityIndicator,StyleSheet} from 'react-native';
 import {useRouter} from 'expo-router';
-import {CalendarDaySummary,CalendarEntry,CalendarSubtask,listCalendarDay,listCalendarMonth,completeTask,getStreakInfo} from '../store';
-import {dayResult,StreakInfo,type DayResult} from '../streak';
+import {CalendarDaySummary,CalendarEntry,CalendarSubtask,listCalendarDay,listCalendarMonth,completeTask,getStreakInfo,type StreakView} from '../store';
+import {dayResult,type DayResult} from '../streak';
+import {FlameIcon,type FlameState} from './FlameIcon';
+import {StreakNote} from './StreakNote';
 import {useAppTheme,ThemeColors,priorityColors} from '../theme';
 import {categories} from '../templates';
 import {TaskTitle} from './TaskTitle';
@@ -11,8 +13,10 @@ import {EventCard} from './EventCard';
 const key=(d:Date)=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
 const bounds=(d:Date)=>{const start=new Date(d.getFullYear(),d.getMonth(),d.getDate());const end=new Date(start);end.setDate(end.getDate()+1);return [start.getTime(),end.getTime()] as const;};
 const WEEK=['D','S','T','Q','Q','S','S'];
+/** Contorno da chama acesa no calendário: marrom-queimado, igual em todos os temas. */
+const FLAME_OUTLINE='#8A3510';
 /** Ícone do dia na sequência: tudo feito, parte feita, nada feito. */
-const RESULT_ICON:Partial<Record<DayResult,string>>={all:'🔥',partial:'🌓',none:'🌧️'};
+const RESULT_ICON:Partial<Record<DayResult,FlameState>>={all:'on',partial:'half',none:'off'};
 const RESULT_LABEL:Partial<Record<DayResult,string>>={all:'tudo feito',partial:'parte feita',none:'nada feito'};
 
 /**
@@ -27,7 +31,7 @@ export function CalendarScreen({active,refreshKey,selected,onSelect}:{active:boo
   const router=useRouter();
   const [revision,setRevision]=useState(0);
   const [summaries,setSummaries]=useState<CalendarDaySummary[]>([]);
-  const [streak,setStreak]=useState<StreakInfo|null>(null);
+  const [streak,setStreak]=useState<StreakView|null>(null);
   const [entries,setEntries]=useState<CalendarEntry[]>([]);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState('');
@@ -96,16 +100,13 @@ export function CalendarScreen({active,refreshKey,selected,onSelect}:{active:boo
   }
 
   return <View style={s.root}>
+    {streak&&(streak.current>0||streak.best>0)?<StreakNote streak={streak} colors={c} appearance={appearance}/>:null}
     <View style={s.monthRow}>
       <Pressable accessibilityRole="button" accessibilityLabel="Mês anterior" hitSlop={8} onPress={()=>changeMonth(-1)} style={s.arrow}><Text style={s.arrowText}>‹</Text></Pressable>
       <Text style={s.month}>{monthLabel}</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Próximo mês" hitSlop={8} onPress={()=>changeMonth(1)} style={s.arrow}><Text style={s.arrowText}>›</Text></Pressable>
     </View>
 
-    {streak&&(streak.current>0||streak.best>0)?<View style={s.streakRow}>
-      <Text style={s.streakText}>{streak.current>0?`🔥 ${streak.current} ${streak.current===1?'dia seguido':'dias seguidos'}`:'🌧️ sem sequência agora'}</Text>
-      {streak.best>streak.current?<Text style={s.streakBest}>melhor: {streak.best}</Text>:null}
-    </View>:null}
 
     <View style={s.grid}>
       {WEEK.map((label,i)=><View key={'w'+i} style={s.weekCell}><Text style={s.weekText}>{label}</Text></View>)}
@@ -123,7 +124,7 @@ export function CalendarScreen({active,refreshKey,selected,onSelect}:{active:boo
           <Text style={[s.dayText,(isSelected||isToday)&&s.dayStrong,isSelected&&{color:c.background}]}>{d}</Text>
           {/* Tarefas: bolinha na cor de realce. Eventos: bolinha azul ao lado. */}
           <View style={s.dots}>
-            {icon?<Text style={s.resultIcon}>{icon}</Text>:total>0?<View style={[s.dot,{backgroundColor:isSelected?c.background:allDone?c.muted:c.accent}]}/>:null}
+            {icon?<FlameIcon state={icon} size={14} ink={FLAME_OUTLINE} faint={c.muted}/>:total>0?<View style={[s.dot,{backgroundColor:isSelected?c.background:allDone?c.muted:c.accent}]}/>:null}
             {events>0?<View style={[s.dot,{backgroundColor:c.event},isSelected&&{borderWidth:1,borderColor:c.background,width:6,height:6}]}/>:null}
           </View>
         </Pressable>;
@@ -131,9 +132,11 @@ export function CalendarScreen({active,refreshKey,selected,onSelect}:{active:boo
     </View>
 
     <View style={s.legend}>
-      <Text style={s.legendText}>🔥 TUDO FEITO  🌓 PARTE  🌧️ NADA</Text>
-      <View style={[s.dot,{backgroundColor:c.accent,marginTop:0,marginLeft:10}]}/><Text style={s.legendText}>TAREFAS</Text>
-      <View style={[s.dot,{backgroundColor:c.event,marginTop:0,marginLeft:10}]}/><Text style={s.legendText}>EVENTOS</Text>
+      <View style={s.legendItem}><FlameIcon state="on" size={13} ink={FLAME_OUTLINE}/><Text style={s.legendText}>TUDO</Text></View>
+      <View style={s.legendItem}><FlameIcon state="half" size={13} ink={FLAME_OUTLINE} faint={c.muted}/><Text style={s.legendText}>PARTE</Text></View>
+      <View style={s.legendItem}><FlameIcon state="off" size={13} ink={FLAME_OUTLINE} faint={c.muted}/><Text style={s.legendText}>NADA</Text></View>
+      <View style={s.legendItem}><View style={[s.dot,{backgroundColor:c.accent}]}/><Text style={s.legendText}>TAREFA</Text></View>
+      <View style={s.legendItem}><View style={[s.dot,{backgroundColor:c.event}]}/><Text style={s.legendText}>EVENTO</Text></View>
     </View>
 
     <View style={s.dayHead}>
@@ -193,12 +196,9 @@ const createStyles=(c:ThemeColors)=>StyleSheet.create({
   dayStrong:{fontWeight:'900',color:c.accent},
   dots:{flexDirection:'row',gap:3,height:13,alignItems:'center',marginTop:1},
   dot:{width:5,height:5,borderRadius:3},
-  resultIcon:{fontSize:11,lineHeight:13},
-  streakRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10,paddingVertical:8,paddingHorizontal:12,borderRadius:10,backgroundColor:c.accentSoft},
-  streakText:{color:c.accent,fontSize:13,fontWeight:'800'},
-  streakBest:{color:c.muted,fontSize:12,fontWeight:'700'},
-  legend:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:5,justifyContent:'flex-end',marginTop:8},
-  legendText:{color:c.muted,fontSize:10,fontWeight:'800',letterSpacing:0.8},
+  legend:{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:12,marginTop:10,paddingTop:10,borderTopWidth:StyleSheet.hairlineWidth,borderTopColor:c.border},
+  legendItem:{flexDirection:'row',alignItems:'center',gap:4},
+  legendText:{color:c.muted,fontSize:9.5,fontWeight:'800',letterSpacing:0.5},
   dayHead:{flexDirection:'row',alignItems:'center',gap:10,marginTop:22,marginBottom:2,paddingBottom:6},
   dayTitle:{color:c.text,fontSize:18,fontWeight:'900'},
   dayMeta:{color:c.muted,fontSize:12,marginTop:4},
