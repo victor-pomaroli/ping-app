@@ -9,7 +9,8 @@
     "ios": "expo run:ios",
     "deps:fix": "expo install --fix",
     "deps:check": "expo install --check",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "test": "node --experimental-strip-types --no-warnings --test tests/*.test.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/baloo-2": "*",
@@ -23,6 +24,8 @@
     "expo-linking": "~58.0.16",
     "expo-notifications": "~58.1.8",
     "expo-router": "~58.0.30",
+    "expo-document-picker": "*",
+    "expo-sharing": "*",
     "expo-sqlite": "*",
     "expo-status-bar": "*",
     "expo-task-manager": "~58.0.13",

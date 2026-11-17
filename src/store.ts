@@ -7,6 +7,9 @@ import {MANY_OVERDUE} from './ping-mood';
 import {Recurrence,DAILY,parseRecurrence,serializeDays,occursOn,lastDayOfMonth} from './recurrence';
 import {DayScore,StreakInfo,streakInfo,brokenStreak,dayKeyAdd} from './streak';
 import type {MorningInfo} from './templates';
+import {ensureRewardTables,grantTaskReward,getBalance} from './rewards';
+import {createBackup,parseBackup,restoreBackup,type RestoreSummary} from './backup';
+import {ensureProgressTables,loadStats,unlockAchievements,listUnlocked,friendshipLevel,ACHIEVEMENTS,type FriendshipInfo} from './progress';
 export type Task={id:number;title:string;description:string;due_at:number;priority:'low'|'medium'|'high';category:TaskCategory;completed:number;completed_at:number|null;archived_at:number|null;notification_id:string|null;parent_id:number|null;daily:number;daily_active:number;daily_day:string|null;recur:string;recur_days:string;no_due:number;kind:TaskKind;ends_at:number|null;location:string;alert_offsets:string};
 /** `kind`: 'task' (tarefa) ou 'event' (evento com hora marcada, avisado antes de acontecer). */
 export type TaskKind='task'|'event';
@@ -53,6 +56,8 @@ const ready=(async()=>{
   await db.execAsync('CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(completed,due_at)');
   await db.execAsync('CREATE INDEX IF NOT EXISTS idx_tasks_archive ON tasks(archived_at,completed_at)');
   await db.execAsync('CREATE INDEX IF NOT EXISTS idx_tasks_active_category ON tasks(archived_at,category,completed,due_at,id)');
+  await ensureRewardTables(db);
+  await ensureProgressTables(db);
   await db.runAsync('UPDATE tasks SET completed_at=due_at WHERE completed=1 AND completed_at IS NULL');
   await db.runAsync('UPDATE tasks SET archived_at=completed_at+2592000000 WHERE completed=1 AND archived_at IS NULL AND completed_at<=?',Date.now()-2592000000);
   return db;
@@ -275,6 +280,27 @@ export async function saveTask(task:TaskInput,id?:number){
   await refreshWidget();
   return {id:taskId!,reminderError};
 }
+/** Recompensa de uma conclusão. Nunca pode quebrar o fluxo de tarefas: qualquer falha só vira aviso no log. */
+async function rewardCompletion(db:Awaited<typeof ready>,task:Task){
+  try{
+    const r=await grantTaskReward(db,task,localDay());
+    if(!r.duplicate&&!r.ineligible)await unlockAchievements(db,await loadStats(db,(await loadStreakBest())));
+  }catch(e){console.warn('[rewards] grant failed',e);}
+}
+async function loadStreakBest(){
+  const scores=await loadScores(),today=await todayScore();
+  return streakInfo(scores,localDay(),today).best;
+}
+export type ProgressView={balance:number;friendship:FriendshipInfo;achievements:{id:string;title:string;description:string;unlocked:boolean}[]};
+/** Saldo, amizade e conquistas para a tela de progresso. */
+export async function getProgress():Promise<ProgressView>{
+  const db=await ready;
+  const stats=await loadStats(db,await loadStreakBest());
+  await unlockAchievements(db,stats); // cobre quem já tinha histórico quando a conquista passou a existir
+  const unlocked=new Set(await listUnlocked(db));
+  return {balance:await getBalance(db),friendship:friendshipLevel(stats.xp),
+    achievements:ACHIEVEMENTS.map(a=>({id:a.id,title:a.title,description:a.description,unlocked:unlocked.has(a.id)}))};
+}
 /**
  * Só grava o novo estado no banco (rápido): a tarefa, o histórico da rotina diária e,
  * se for uma tarefa principal, as subtarefas em cascata. Retorna a tarefa ou null.
@@ -287,6 +313,7 @@ export async function setTaskCompleted(id:number,completed:boolean){
   if(task.daily)await db.runAsync('INSERT OR REPLACE INTO daily_history(task_id,day,completed) VALUES(?,?,?)',id,localDay(),completed?1:0);
   if(!task.parent_id)await db.runAsync('UPDATE tasks SET completed=?,completed_at=?,archived_at=NULL WHERE parent_id=?',completed?1:0,completed?Date.now():null,id);
   else await syncParentCompletion(task.parent_id);
+  if(completed)await rewardCompletion(db,task);
   return task;
 }
 /**
@@ -301,6 +328,7 @@ async function syncParentCompletion(parentId:number){
   if(done===!!parent.completed)return;
   await db.runAsync('UPDATE tasks SET completed=?,completed_at=?,archived_at=NULL WHERE id=?',done?1:0,done?Date.now():null,parentId);
   if(parent.daily)await db.runAsync('INSERT OR REPLACE INTO daily_history(task_id,day,completed) VALUES(?,?,?)',parentId,localDay(),done?1:0);
+  if(done)await rewardCompletion(db,parent);
 }
 /** Efeitos lentos da conclusão: cancela/reagenda lembretes e limpa a bandeja. */
 export async function syncTaskCompletion(task:Task,completed:boolean){
@@ -638,4 +666,19 @@ export async function endRoutine(id:number){
 }
 export async function routineHistory(id:number,limit=30){
   const db=await ready;return db.getAllAsync<{day:string;completed:number}>('SELECT day,completed FROM daily_history WHERE task_id=? ORDER BY day DESC LIMIT ?',id,limit);
+}
+
+/** Backup local (grátis): JSON com tarefas, histórico, preferências, moedas e conquistas. */
+export async function exportBackupText(appVersion:string):Promise<string>{
+  const db=await ready;
+  return JSON.stringify(await createBackup(db,appVersion));
+}
+/** Restaura um backup (substitui os dados atuais) e refaz lembretes e widget. Arquivo inválido não altera nada. */
+export async function restoreBackupText(text:string):Promise<RestoreSummary>{
+  const backup=parseBackup(text);
+  const db=await ready;
+  const summary=await restoreBackup(db,backup);
+  await rescheduleAllReminders();
+  await refreshWidget();
+  return summary;
 }
