@@ -21,6 +21,11 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.7.1] — 2026-11-16
+
+### Alterado
+- Os rostos do Ping nas notificações agora ficam sobre um fundo quadrado arredondado verde, no mesmo formato do ícone do app, em vez de um sino solto sobre fundo transparente.
+
 ## [1.7.0] — 2026-11-16
 
 ### Adicionado
