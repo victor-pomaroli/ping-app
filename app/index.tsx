@@ -167,9 +167,14 @@ export default function Home(){
     setFlipped(m=>({...m,[t.id]:next}));
     if(next)setCompleteKey(k=>k+1);
     try{
-      if(motionOn)await new Promise<void>(resolve=>setTimeout(resolve,COMPLETE_SETTLE));
-      await completeTask(t.id,next,true);
-      await refresh();
+      // A gravação corre junto com a animação do check (antes era uma depois da outra).
+      const write=completeTask(t.id,next,true);
+      if(motionOn)await Promise.all([write,new Promise<void>(resolve=>setTimeout(resolve,COMPLETE_SETTLE))]);
+      else await write;
+      // Atualiza a lista na hora, sem esperar a releitura do banco; a releitura vem logo depois e corrige o resto.
+      const at=next?Date.now():null;
+      setTasks(old=>old.map(x=>x.id===t.id||(!t.parent_id&&x.parent_id===t.id)?{...x,completed:next?1:0,completed_at:at}:x));
+      refresh().catch(e=>console.warn('[home] refresh failed',e));
     }
     catch(e){setFeedback({title:'Não deu certo.',message:String(e)});}
     finally{setFlipped(m=>{const {[t.id]:_gone,...rest}=m;return rest;});}

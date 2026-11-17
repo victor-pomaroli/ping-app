@@ -24,10 +24,11 @@ A cada versão:
 - **Backup e restauração** por arquivo em Ajustes, grátis e sem nuvem: tarefas, rotinas, moedas e conquistas. Usa `expo-sharing` e `expo-document-picker` (**exige novo build nativo**).
 - **Cantinho do Ping**: quartinho opcional (atalho em Progresso) para decorar com moedas: 6 itens cosméticos em 5 espaços, compra com confirmação, usar e remover. Todos os itens são grátis; nenhum dá vantagem.
 - **Atalhos na aba Hoje**: saldo de moedas (com o ícone) e botões para o Cantinho e as Conquistas. O Cantinho ganhou quarto maior, itens com miniatura, "provar" antes de comprar e filtro por espaço. Em Ajustes, "Ferramentas de teste" para ganhar moedas sem concluir tarefas (desligue em `TEST_TOOLS` antes de publicar).
+- **Cantinho vivo**: quarto redesenhado com janela (céu de dia, fim de tarde e noite com estrelas), sol entrando, piso de madeira e cortinas no tom do tema. O Ping mora lá: passeia, olha os móveis, comenta, cochila, senta no sofá e dança no tapete. Toque nos itens para ele reagir; a luminária acende e o rádio toca. 5 itens novos (cacto, pôster do Ping, tapete redondo, rádio retrô e pufe) e uma lojinha com descrição e prévia.
 - Estrutura interna do Ping Pro com o paywall desligado: nada muda para quem usa o app hoje.
 
 ### Alterado
-- Concluir tarefa ficou mais ágil: o cartão responde assim que a conclusão é gravada; lembretes, bandeja, conquistas e widget são atualizados em seguida, em fila.
+- Concluir tarefa ficou mais ágil: a gravação corre junto com a animação, a lista se atualiza na hora e lembretes, bandeja, conquistas e widget esperam a lista recarregar antes de rodar. Arquivar concluídas antigas passou a ser uma vez por dia.
 
 ## [1.9.1] — 2026-11-17
 

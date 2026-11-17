@@ -163,7 +163,9 @@ export async function listCalendarDay(start:number,end:number):Promise<CalendarE
 export async function listArchivedTasks(limit=50,offset=0){const db=await ready;return db.getAllAsync<Task>('SELECT * FROM tasks WHERE parent_id IS NULL AND archived_at IS NOT NULL ORDER BY archived_at DESC LIMIT ? OFFSET ?',limit,offset);}
 export async function archiveTask(id:number){const db=await ready;await db.runAsync('UPDATE tasks SET archived_at=? WHERE (id=? OR parent_id=?) AND completed=1',Date.now(),id,id);await refreshWidget();}
 export async function restoreArchivedTask(id:number){const db=await ready;await db.runAsync('UPDATE tasks SET archived_at=NULL WHERE id=? OR parent_id=?',id,id);await refreshWidget();}
-export async function archiveOldCompletedTasks(){const db=await ready;await db.runAsync('UPDATE tasks SET archived_at=? WHERE daily=0 AND completed=1 AND archived_at IS NULL AND completed_at IS NOT NULL AND completed_at<=?',Date.now(),Date.now()-2592000000);}
+/** Arquivar as concluídas antigas é diário: antes era uma escrita a cada recarga da lista (inclusive a cada conclusão). */
+let archivedDay='';
+export async function archiveOldCompletedTasks(){const today=localDay();if(archivedDay===today)return;archivedDay=today;const db=await ready;await db.runAsync('UPDATE tasks SET archived_at=? WHERE daily=0 AND completed=1 AND archived_at IS NULL AND completed_at IS NOT NULL AND completed_at<=?',Date.now(),Date.now()-2592000000);}
 /** Tarefas principais pendentes (próximas 5) e concluídas hoje (mais recentes primeiro) para o widget. */
 export async function listWidgetTasks(){
   await syncDailyTasks();
@@ -359,8 +361,11 @@ export async function syncTaskCompletion(task:Task,completed:boolean){
 }
 /** Fila única dos efeitos lentos: roda um de cada vez e na ordem, para concluir e desfazer rápido não embaralhar lembretes. */
 let effectsChain:Promise<unknown>=Promise.resolve();
-function runSlowEffects(task:Task,completed:boolean):Promise<void>{
+function runSlowEffects(task:Task,completed:boolean,delayMs=0):Promise<void>{
   const job=effectsChain.then(async()=>{
+    // Nas telas, espera a lista recarregar primeiro: o SQLite atende uma consulta por vez, e os lembretes
+    // (várias escritas e chamadas nativas) passavam na frente da recarga, atrasando o cartão.
+    if(delayMs)await new Promise(r=>setTimeout(r,delayMs));
     await syncTaskCompletion(task,completed);
     await checkAchievements();
     await refreshWidget();
@@ -376,7 +381,7 @@ function runSlowEffects(task:Task,completed:boolean):Promise<void>{
 export async function completeTask(id:number,completed:boolean,defer=false){
   const task=await setTaskCompleted(id,completed);
   if(!task)return;
-  const effects=runSlowEffects(task,completed);
+  const effects=runSlowEffects(task,completed,defer?700:0);
   if(defer){effects.catch(e=>console.warn('[completion] deferred effects failed',e));return;}
   await effects;
 }

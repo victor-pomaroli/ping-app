@@ -8,18 +8,23 @@ import type {RewardDb} from './rewards.ts';
 const getBalance=async(db:RewardDb):Promise<number>=>(await db.getFirstAsync<{b:number}>('SELECT COALESCE(SUM(amount),0) AS b FROM wallet_transactions'))?.b??0;
 
 export type SlotId='wall'|'floor'|'corner'|'table'|'seat';
-export type ShopItem={id:string;name:string;slot:SlotId;price:number;/** Reservado à Fase 6 (Pro): hoje nenhum item é Pro. */proOnly?:boolean};
+export type ShopItem={id:string;name:string;slot:SlotId;price:number;description:string;/** Reservado à Fase 6 (Pro): hoje nenhum item é Pro. */proOnly?:boolean};
 /** Hipótese de catálogo e preços: calibrar com o beta. */
 export const SLOTS:readonly {id:SlotId;name:string}[]=[
   {id:'wall',name:'Parede'},{id:'floor',name:'Chão'},{id:'corner',name:'Canto'},{id:'table',name:'Mesinha'},{id:'seat',name:'Assento'},
 ];
 export const CATALOG:readonly ShopItem[]=[
-  {id:'quadro_sol',name:'Quadro do sol',slot:'wall',price:40},
-  {id:'quadro_lua',name:'Quadro da lua',slot:'wall',price:60},
-  {id:'tapete',name:'Tapete listrado',slot:'floor',price:30},
-  {id:'planta',name:'Plantinha',slot:'corner',price:25},
-  {id:'luminaria',name:'Luminária',slot:'table',price:35},
-  {id:'sofa',name:'Sofá',slot:'seat',price:80},
+  {id:'planta',name:'Costela-de-adão',slot:'corner',price:25,description:'Balança com o vento da janela.'},
+  {id:'cacto',name:'Cacto florido',slot:'corner',price:35,description:'Zero rega, uma flor rosa.'},
+  {id:'quadro_sol',name:'Quadro do sol',slot:'wall',price:40,description:'Um dia de folga emoldurado.'},
+  {id:'quadro_lua',name:'Quadro da lua',slot:'wall',price:60,description:'Céu estrelado para a parede.'},
+  {id:'poster_ping',name:'Pôster do Ping',slot:'wall',price:75,description:'Faça acontecer, em tamanho A3.'},
+  {id:'tapete',name:'Tapete listrado',slot:'floor',price:30,description:'Bom para dançar.'},
+  {id:'tapete_redondo',name:'Tapete redondo',slot:'floor',price:55,description:'Macio, felpudo e redondinho.'},
+  {id:'luminaria',name:'Luminária',slot:'table',price:35,description:'Toque para acender e apagar.'},
+  {id:'radio',name:'Rádio retrô',slot:'table',price:70,description:'Toque para tocar uma música.'},
+  {id:'pufe',name:'Pufe',slot:'seat',price:45,description:'Afunda que é uma beleza.'},
+  {id:'sofa',name:'Sofá',slot:'seat',price:80,description:'O trono oficial do Ping.'},
 ];
 export const itemById=(id:string)=>CATALOG.find(i=>i.id===id);
 
