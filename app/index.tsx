@@ -324,7 +324,7 @@ export default function Home(){
       onMomentumScrollEnd={event=>{const index=Math.max(0,Math.min(tabs.length-1,Math.round(event.nativeEvent.contentOffset.x/pageWidth)));pageRef.current=index;setTab(tabs[index]);}}
     >
       {tabs.map((page,index)=><View key={page} style={{width:pageWidth,flex:1}}>
-      <Animated.ScrollView ref={(el:any)=>{scrollRefs.current[page]=el;}} style={{flex:1}} contentContainerStyle={[s.container,{paddingTop:insets.top+89}]} keyboardShouldPersistTaps="handled" scrollEventThrottle={16}
+      <Animated.ScrollView ref={(el:any)=>{scrollRefs.current[page]=el;}} showsVerticalScrollIndicator={false} style={{flex:1}} contentContainerStyle={[s.container,{paddingTop:insets.top+89}]} keyboardShouldPersistTaps="handled" scrollEventThrottle={16}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={pullRefresh} colors={[c.accent]} tintColor={c.accent} progressBackgroundColor={c.surfaceRaised} progressViewOffset={insets.top+60}/>}
         onScroll={Animated.event([{nativeEvent:{contentOffset:{y:verticalY[page]}}}],{useNativeDriver:true,listener:(event:any)=>{scrollY.current[page]=event.nativeEvent.contentOffset.y;}})}>
 

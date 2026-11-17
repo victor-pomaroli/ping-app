@@ -13,7 +13,7 @@ export {PING_SIZE};
 /** Coluna reservada ao Ping, ao lado do post-it: nada do balão passa daqui para cima do papel. */
 export const PING_COLUMN=118;
 /** Folga à direita da coluna que o balão pode usar (é a margem da tela). */
-const COLUMN_BLEED=12;
+const COLUMN_BLEED=6;
 const PING_LEFT=4;
 /** Quanto o balão fica na tela depois de aparecer (ms) e quanto dura o "digitando…" (ms). */
 const BUBBLE_MS=4600;

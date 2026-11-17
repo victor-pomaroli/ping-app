@@ -19,6 +19,9 @@ type Props={
   personality?:NotificationPersonality;active?:boolean;completeKey?:number;refreshKey?:number;
 };
 
+/** Quanto do Ping desce sobre o papel (px, medido do topo do post-it até a base do desenho). */
+const PING_PERCH=66;
+
 const pad=(n:number)=>String(n).padStart(2,'0');
 const plural=(n:number,one:string,many:string)=>`${n} ${n===1?one:many}`;
 /** Rótulo que muda com o estado do dia, em vez de um título fixo. */
@@ -53,8 +56,8 @@ export function SummaryNote({appearance,page,left,overdue,today,done,celebrateKe
     {scale:lift.interpolate({inputRange:[0,1],outputRange:[1,1.04]})},
     {rotate:wobble.interpolate({inputRange:[-1,1],outputRange:['-5deg','5deg']})},
   ]};
-  return <View style={{flexDirection:'row',alignItems:'flex-end'}}>
-  <Animated.View style={[look.wrap,motion,{flex:1}]}>
+  return <View>
+  <Animated.View style={[look.wrap,motion]}>
     {binder?<View pointerEvents="none" style={[dark.tape,{backgroundColor:bc.tape}]}/>:null}
     <View style={[look.sheet,binder&&{backgroundColor:look.paper}]}>
       {binder
@@ -76,7 +79,8 @@ export function SummaryNote({appearance,page,left,overdue,today,done,celebrateKe
       {!binder?<View pointerEvents="none" style={[light.pin,{backgroundColor:pc.pin}]}><View style={light.pinShine}/></View>:null}
     </View>
   </Animated.View>
-  <View style={{width:PING_COLUMN,height:PING_SIZE,zIndex:10,overflow:'visible'}}>
+  {/* O Ping fica por cima do post-it, no canto superior direito (onde o papel está vazio): o papel mantém o tamanho de antes. */}
+  <View pointerEvents="box-none" style={{position:'absolute',right:-6,top:-(PING_SIZE-PING_PERCH),width:PING_COLUMN,height:PING_SIZE,zIndex:10,overflow:'visible'}}>
     <PingMascot personality={personality} left={left} overdue={overdue} done={done} active={active} celebrateKey={celebrateKey} completeKey={completeKey} refreshKey={refreshKey}/>
   </View>
   </View>;

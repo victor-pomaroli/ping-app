@@ -21,6 +21,13 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.6.1] — 2026-11-16
+
+### Alterado
+- O post-it do resumo voltou ao tamanho e ao formato de antes (largura total), com o Ping por cima, pousado no canto superior direito, onde o papel está vazio. O balão sobe acima do papel e não cobre o texto do resumo.
+- O Ping ficou sem a sombra no chão e sem a faixa escura de sombreado na base do sino.
+- A barra de rolagem vertical branca das abas deixou de aparecer.
+
 ## [1.6.0] — 2026-11-16
 
 ### Alterado

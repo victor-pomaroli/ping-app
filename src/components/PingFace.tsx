@@ -225,7 +225,6 @@ export const PingFace=forwardRef<PingFaceHandle,Props>(function PingFace({person
   });
   const sway=useAnimatedStyle(()=>({transform:[{rotate:`${rot.value}deg`}]}));
   const clapStyle=useAnimatedStyle(()=>({transform:[{rotate:`${clap.value}deg`}]}));
-  const shadow=useAnimatedStyle(()=>({opacity:0.28*(1+hopY.value/160),transform:[{scaleX:1+hopY.value/260}]}));
   const lookStyle=useAnimatedStyle(()=>({transform:[{translateX:u(lookX.value)},{translateY:u(lookY.value)}]}));
   const lookHalf=useAnimatedStyle(()=>({transform:[{translateX:u(lookX.value*1.2)},{translateY:u(lookY.value*0.4)}]}));
   const blinkDot=useAnimatedStyle(()=>({transform:[{scaleY:Math.max(0.08,1-blink.value*0.92)}]}));
@@ -280,9 +279,6 @@ export const PingFace=forwardRef<PingFaceHandle,Props>(function PingFace({person
   };
 
   return <View style={st.slot}>
-    <Animated.View pointerEvents="none" style={[st.shadow,shadow]}>
-      <Svg width={u(120)} height={u(14)} viewBox="0 0 120 14"><Ellipse cx={60} cy={7} rx={54} ry={5} fill="#000"/></Svg>
-    </Animated.View>
     <Animated.View style={[st.fill,{transformOrigin:'50% 82%'},outer]}>
       <Animated.View style={[st.fill,{transformOrigin:'50% 20%'},sway]}>
         {/* badalo (atrás do corpo) */}
@@ -300,7 +296,6 @@ export const PingFace=forwardRef<PingFaceHandle,Props>(function PingFace({person
             <Circle cx={96} cy={35} r={3.5} fill="#fff" opacity={0.55}/>
             <Path d={BODY} fill={color} stroke={OUT} strokeWidth={6} strokeLinejoin="round"/>
             <Path d="M62 104C63 82 72 66 88 57" stroke="#fff" strokeWidth={6} strokeLinecap="round" fill="none" opacity={0.5}/>
-            <Path d="M42 152C54 150 66 147 74 143" stroke="#000" strokeWidth={5} strokeLinecap="round" fill="none" opacity={0.08}/>
             {face.cheeks?<><Ellipse cx={60} cy={126} rx={9} ry={5.5} fill="#ff8aa0" opacity={0.8}/><Ellipse cx={140} cy={126} rx={9} ry={5.5} fill="#ff8aa0" opacity={0.8}/></>:null}
           </Svg>
         </View>
@@ -375,5 +370,4 @@ function Loop({kind,delay,running,box,children}:{kind:'spark'|'drop'|'note'|'ste
 const st=StyleSheet.create({
   slot:{width:PING_SIZE,height:PING_SIZE,overflow:'visible'},
   fill:{position:'absolute',left:0,right:0,top:0,bottom:0},
-  shadow:{position:'absolute',left:u(40),top:u(190),width:u(120),height:u(14)},
 });
