@@ -6,8 +6,8 @@ import type {NotificationPersonality} from './preferences';
  * Frases curtas (cabem em duas linhas no balão) e sem repetir os textos que o app já tem.
  */
 export type DayMood='devendo'|'falta_pouco'|'ainda_hoje'|'cumprida'|'vazio';
-/** Além do humor do dia: ao concluir, ao ser cutucado (e cansar), ao acordar, ao atualizar, ao voltar depois de dias, ao tocar o sino e com muitas atrasadas. */
-export type Situation=DayMood|'concluiu'|'toque'|'cansado'|'tonto'|'recuperou'|'soneca'|'espiar'|'ciumes'|'sino'|'nuvem';
+/** Além do humor do dia: ao concluir, ao ser cutucado (e cansar), ao acordar, ao atualizar, ao voltar depois de dias, ao tocar o sino, com muitas atrasadas, ao bater um marco da sequência e ao recomeçar depois de perdê-la. */
+export type Situation=DayMood|'concluiu'|'toque'|'cansado'|'tonto'|'recuperou'|'soneca'|'espiar'|'ciumes'|'sino'|'nuvem'|'sequencia'|'recomeco';
 
 /** Mesmo critério do rótulo do post-it (TÁ DEVENDO, FALTA POUCO, AINDA HOJE, MISSÃO CUMPRIDA, DIA EM BRANCO). */
 export function dayMood(left:number,overdue:number,done:number):DayMood{
@@ -33,6 +33,8 @@ const LINES:Record<NotificationPersonality,Record<Situation,string[]>>={
     ciumes:['Olha só quem apareceu.','Sumiu, hein? Tô bem. Tô ótimo.'],
     sino:['DING! Satisfeito?','Quer barulho? Toma.'],
     nuvem:['Tá chovendo atraso aqui.','Nublou. Culpa de quem?'],
+    sequencia:['{n} dias seguidos. Tô impressionado. Quase.','{n} dias na sequência. Não estraga.','Chama acesa: {n} dias. Sem pressão.'],
+    recomeco:['Perdeu a sequência de {n}. Acontece.','{n} dias foram embora. Bora de novo.'],
   },
   semPaciencia:{
     devendo:['Atrasou. Resolve agora.','Chega de enrolar.','Isso tá vencido. Anda.'],
@@ -50,6 +52,8 @@ const LINES:Record<NotificationPersonality,Record<Situation,string[]>>={
     ciumes:['Sumiu. Pois é.','Já era hora.'],
     sino:['DING! Alto o bastante?','Escutou? Agora faz.'],
     nuvem:['Chuva de atraso. Resolve.','Isso tá virando tempestade.'],
+    sequencia:['{n} dias seguidos. Mantém.','{n} dias. Não para agora.','Sequência de {n}. Foco.'],
+    recomeco:['Quebrou os {n} dias. Recomeça.','Perdeu a sequência. Volta hoje.'],
   },
   deBoa:{
     devendo:['Tem uns atrasos. Sem estresse.','Dá pra resolver no seu ritmo.','Respira. Uma de cada vez.'],
@@ -67,13 +71,16 @@ const LINES:Record<NotificationPersonality,Record<Situation,string[]>>={
     ciumes:['Ei, que saudade! Hmpf.','Demorou, hein? Senti falta.'],
     sino:['DIIING! Que gostoso!','Bimbalhei! Hihi.'],
     nuvem:['Eita, nublou. Bora limpar?','Uns atrasos chovendo… a gente resolve.'],
+    sequencia:['{n} dias seguidos! Que orgulho. 🌿','Sequência de {n}. Você é demais!','{n} dias de chama acesa. 🔥'],
+    recomeco:['A sequência de {n} acabou. Sem culpa.','Bora recomeçar? Um dia de cada vez.'],
   },
 };
 
 /** Sorteia uma fala da situação, sem repetir a anterior (`last` é o índice da última dita). */
-export function pickLine(personality:NotificationPersonality,situation:Situation,last?:number){
+export function pickLine(personality:NotificationPersonality,situation:Situation,last?:number,vars?:{n?:number}){
   const options=LINES[personality][situation];
   let index=Math.floor(Math.random()*options.length);
   if(options.length>1&&index===last)index=(index+1)%options.length;
-  return {text:options[index],index};
+  const text=options[index].replace(/\{n\}/g,String(vars?.n??''));
+  return {text,index};
 }

@@ -12,6 +12,9 @@ import {fatigueAt,fatigueStage,tapFatigue} from '../ping-fatigue';
 import {playSound,playTap,stopSound} from '../ping-sounds';
 import {activity} from '../ping-activity';
 import {awayMsOnce} from '../ping-presence';
+import {getStreakInfo,getBrokenStreak,localDay} from '../store';
+import {STREAK_MILESTONES} from '../streak';
+import {getMeta,setMeta} from '../preferences';
 
 export {PING_SIZE};
 /** Coluna reservada ao Ping, ao lado do post-it: nada do balão passa daqui para cima do papel. */
@@ -57,7 +60,8 @@ const TONES:Record<Tone,{chip:string;glyph:string;text:string}>={
 function toneOf(personality:NotificationPersonality,moment:FaceMoment,situation:Situation):Tone{
   if(situation==='cansado'||situation==='soneca')return 'cansado';
   if(situation==='tonto')return 'tonto';
-  if(situation==='sino')return 'festa';
+  if(situation==='sino'||situation==='sequencia')return 'festa';
+  if(situation==='recomeco')return 'cansado';
   if(situation==='vazio')return 'vazio';
   if(personality==='semPaciencia'&&(situation==='devendo'||situation==='toque'||(moment!=='no_horario'&&situation!=='concluiu'&&situation!=='cumprida')))return 'irritado';
   if(situation==='concluiu'||situation==='cumprida')return 'festa';
@@ -114,8 +118,8 @@ export function PingMascot({personality,left,overdue,done,active,celebrateKey,co
     if(hideTimer.current)clearTimeout(hideTimer.current);
     if(typeTimer.current)clearTimeout(typeTimer.current);
   };
-  const say=useCallback((situation:Situation)=>{
-    const {text,index}=pickLine(personality,situation,lastIndex.current[situation]);
+  const say=useCallback((situation:Situation,vars?:{n?:number})=>{
+    const {text,index}=pickLine(personality,situation,lastIndex.current[situation],vars);
     lastIndex.current[situation]=index;
     lastSpoke.current=Date.now();
     const tone=toneOf(personality,moment,situation);
@@ -162,6 +166,14 @@ export function PingMascot({personality,left,overdue,done,active,celebrateKey,co
       const away=await awayMsOnce().catch(()=>0);
       if(cancelled)return;
       if(away>=MISS_YOU_MS){sulk();return;}
+      // Perdeu uma sequência de 3+ dias ontem: comenta uma vez, sem culpa.
+      const broken=await getBrokenStreak().catch(()=>0);
+      if(cancelled)return;
+      if(broken>0&&(await getMeta('brokenSeen').catch(()=>null))!==localDay()){
+        await setMeta('brokenSeen',localDay()).catch(()=>{});
+        say('recomeco',{n:broken});
+        return;
+      }
       say(mood);if(mood==='devendo'&&motion)face.current?.ring();
     },900);
     return()=>{cancelled=true;clearTimeout(timer);};
@@ -214,10 +226,27 @@ export function PingMascot({personality,left,overdue,done,active,celebrateKey,co
       const t1=setTimeout(()=>setConfettiKey(k=>k+1),500),t2=setTimeout(()=>setConfettiKey(k=>k+1),1000);
       if(active)playSound('party',{volume:0.7});
       if(active)say('concluiu');
+      checkMilestone();
       return()=>{clearTimeout(t1);clearTimeout(t2);};
     }
     if(active)say('concluiu');
+    checkMilestone();
   },[completeKey]);
+  // Bateu 3, 7, 14, 30 ou 100 dias seguidos: depois da fala de concluir, ele comemora a sequência (uma vez por marco).
+  function checkMilestone(){
+    if(!active)return;
+    getStreakInfo().then(async info=>{
+      if(!info.todayDone||!STREAK_MILESTONES.includes(info.current))return;
+      const mark=`${localDay()}:${info.current}`;
+      if(await getMeta('streakCelebrated')===mark)return;
+      await setMeta('streakCelebrated',mark);
+      setTimeout(()=>{
+        if(motion){face.current?.hop(1.4);face.current?.dance(2.8);setConfettiKey(k=>k+1);}
+        playSound('party',{volume:0.7});
+        say('sequencia',{n:info.current});
+      },2600);
+    }).catch(console.warn);
+  }
 
   // Puxou para atualizar: ele espia (olha para baixo e para os lados) e o sino toca ao terminar.
   useEffect(()=>{

@@ -177,7 +177,44 @@ export function missYouMessage(personality:NotificationPersonality,pending:numbe
  return options[Math.abs(variant)%options.length].replace(/\{n\}/g,countText(pending)).replace(/\{dias\}/g,String(days));
 }
 /** Aviso opcional das 20h quando o dia terminou sem nada pendente. */
-export function cleanDayMessage(personality:NotificationPersonality,variant=0){
+export function cleanDayMessage(personality:NotificationPersonality,variant=0,streak=0){
  const options=cleanDayTemplates[personality];
- return options[Math.abs(variant)%options.length];
+ return options[Math.abs(variant)%options.length]+streakTail(streak);
+}
+
+/** Sequência (dias seguidos) como linha final: só aparece a partir de 2 dias. */
+const streakTail=(streak:number)=>streak>=2?` 🔥 ${streak} dias seguidos.`:'';
+/** Aviso das 20h com a sequência em risco: falta pouco para o dia contar. */
+const riskTemplates:Record<NotificationPersonality,readonly string[]>={
+ debochado:['Falta {n} pra manter os {dias} dias seguidos. Dá tempo. Acho.','Sua sequência de {dias} dias tá por um fio. Falta {n}.'],
+ semPaciencia:['FALTA {n}! Não joga fora {dias} dias seguidos.','{dias} dias seguidos em risco. Falta {n}. FAZ AGORA.'],
+ deBoa:['Falta {n} pra manter os {dias} dias seguidos. Dá tempo, com calma.','Sua sequência de {dias} dias ainda dá pra salvar. Falta {n}.'],
+};
+export function streakRiskMessage(personality:NotificationPersonality,remaining:number,days:number,variant=0){
+ const options=riskTemplates[personality];
+ return options[Math.abs(variant)%options.length].replace(/\{n\}/g,remaining===1?'1 coisa':`${remaining} coisas`).replace(/\{dias\}/g,String(days));
+}
+/** Resumo do dia para a notificação da manhã. */
+export type MorningInfo={tasks:number;routines:number;events:number;overdue:number;top?:string;topTime?:string;firstEvent?:string;firstEventTime?:string;streak:number};
+const plural=(n:number,one:string,many:string)=>`${n} ${n===1?one:many}`;
+const morningOpeners:Record<NotificationPersonality,readonly string[]>={
+ debochado:['Bom dia, {vocativo}. Hoje: {resumo}.','{vocativo}, acordou? Hoje tem {resumo}.'],
+ semPaciencia:['BOM DIA, {vocativo}! Hoje: {resumo}. Bora.','De pé, {vocativo}! Tem {resumo} hoje.'],
+ deBoa:['Bom dia, {vocativo}! Hoje tem {resumo}. Sem pressa. 🌿','Oi, {vocativo}, bom dia. Hoje: {resumo}.'],
+};
+const morningEmpty:Record<NotificationPersonality,string>={
+ debochado:'Bom dia, {vocativo}. Dia livre. Aproveita antes que alguém invente algo.',
+ semPaciencia:'Bom dia, {vocativo}. Nada marcado hoje. Descansa.',
+ deBoa:'Bom dia, {vocativo}! Hoje não tem nada marcado. Aproveita. 🌿',
+};
+export function morningMessage(personality:NotificationPersonality,info:MorningInfo,variant=0,displayName='',addressStyle:AddressStyle='neutral'){
+ const items=[info.tasks?plural(info.tasks,'tarefa','tarefas'):'',info.routines?plural(info.routines,'rotina','rotinas'):'',info.events?plural(info.events,'evento','eventos'):''].filter(Boolean);
+ if(!items.length&&!info.overdue)return personalize(morningEmpty[personality],variant,displayName,addressStyle);
+ const resumo=items.length?(items.length===1?items[0]:items.slice(0,-1).join(', ')+' e '+items[items.length-1]):'só o que ficou para trás';
+ const opener=morningOpeners[personality][Math.abs(variant)%morningOpeners[personality].length].replace('{resumo}',resumo);
+ let text=personalize(opener,variant,displayName,addressStyle);
+ if(info.top)text+=` A primeira: ${info.top}${info.topTime?`, às ${info.topTime}`:''}.`;
+ else if(info.firstEvent)text+=` ${info.firstEvent}${info.firstEventTime?` às ${info.firstEventTime}`:''}.`;
+ if(info.overdue)text+=` ${plural(info.overdue,'atrasada','atrasadas')} de antes.`;
+ return text+streakTail(info.streak);
 }

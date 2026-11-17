@@ -3,7 +3,7 @@ import {View,Text,Switch,Pressable,StyleSheet,Linking,TextInput,Image} from 'rea
 import {showDialog,showError} from './PingDialog';
 import * as Notifications from 'expo-notifications';
 import {getPreferences,setPreference,Preferences,AddressStyle,NotificationPersonality} from '../preferences';
-import {rescheduleAllReminders,deleteAllTasks,syncMoodNotices} from '../store';
+import {rescheduleAllReminders,deleteAllTasks,syncMoodNotices,syncMorningSummaries} from '../store';
 import {setSoundsEnabled} from '../ping-sounds';
 import {testNotification} from '../notifications';
 import {FACE_IMAGES,FaceMoment} from '../faces';
@@ -13,7 +13,7 @@ import {useAppTheme,ThemeColors,Appearance,palettes,appearances,appearanceNames}
 export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
  const {colors:c,appearance,changeAppearance}=useAppTheme();
  const s=React.useMemo(()=>createStyles(c),[c]);
- const [prefs,setPrefs]=useState<Preferences>({notifications:true,privatePreviews:false,appearance:'dark',displayName:'',addressStyle:'neutral',personality:'debochado',eventAlerts:[30],animations:true,sounds:true,moodNotices:true});
+ const [prefs,setPrefs]=useState<Preferences>({notifications:true,privatePreviews:false,appearance:'dark',displayName:'',addressStyle:'neutral',personality:'debochado',eventAlerts:[30],animations:true,sounds:true,moodNotices:true,morningSummary:true,morningHour:8});
  const [busy,setBusy]=useState(false);
  const [permission,setPermission]=useState('Verificando...');
  const [themeBusy,setThemeBusy]=useState(false);
@@ -103,6 +103,15 @@ export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
    try{await setPreference('moodNotices',value);await syncMoodNotices();}
    catch(e){setPrefs(prev=>({...prev,moodNotices:previous}));showError('Não foi possível salvar',e);}
  }
+ async function changeMorning(patch:{morningSummary?:boolean;morningHour?:number}){
+   const previous={morningSummary:prefs.morningSummary,morningHour:prefs.morningHour};
+   setPrefs(prev=>({...prev,...patch}));
+   try{
+     if(patch.morningSummary!==undefined)await setPreference('morningSummary',patch.morningSummary);
+     if(patch.morningHour!==undefined)await setPreference('morningHour',patch.morningHour);
+     await syncMorningSummaries();
+   }catch(e){setPrefs(prev=>({...prev,...previous}));showError('Não foi possível salvar',e);}
+ }
  function confirmDelete(){
    showDialog({eyebrow:'PING / EXCLUSÃO',title:'Apagar todas as tarefas?',message:'Essa ação exclui permanentemente todas as tarefas e cancela seus lembretes. Não é possível desfazer.',cancelLabel:'CANCELAR',confirmLabel:'APAGAR TUDO',destructive:true,onConfirm:async()=>{
      if(busy)return;
@@ -185,7 +194,12 @@ export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
    <View style={s.panel}>
      <View style={s.row}><View style={s.copy}><Text style={s.title}>Lembretes ativos</Text><Text style={s.detail}>Ative ou pause os avisos de tarefas.</Text></View><Switch disabled={busy} value={prefs.notifications} onValueChange={v=>change('notifications',v)} trackColor={{false:c.border,true:c.accentSoft}} thumbColor={prefs.notifications?c.accent:c.muted}/></View>
      <View style={s.separator}/>
-     <View style={s.row}><View style={s.copy}><Text style={s.title}>Saudade e dia limpo</Text><Text style={s.detail}>O Ping avisa quando você some por 3 dias com tarefas esperando e às 20h quando o dia termina limpo.</Text></View><Switch disabled={busy||!prefs.notifications} value={prefs.moodNotices&&prefs.notifications} onValueChange={changeMoodNotices} trackColor={{false:c.border,true:c.accentSoft}} thumbColor={prefs.moodNotices&&prefs.notifications?c.accent:c.muted}/></View>
+     <View style={s.row}><View style={s.copy}><Text style={s.title}>Saudade, dia limpo e sequência</Text><Text style={s.detail}>O Ping avisa quando você some por 3 dias com tarefas esperando e às 20h quando o dia termina limpo ou a sequência está em risco.</Text></View><Switch disabled={busy||!prefs.notifications} value={prefs.moodNotices&&prefs.notifications} onValueChange={changeMoodNotices} trackColor={{false:c.border,true:c.accentSoft}} thumbColor={prefs.moodNotices&&prefs.notifications?c.accent:c.muted}/></View>
+     <View style={s.separator}/>
+     <View style={s.row}><View style={s.copy}><Text style={s.title}>Resumo da manhã</Text><Text style={s.detail}>Um aviso com o que o dia tem: tarefas, rotinas, eventos e sua sequência. Dias sem nada não avisam.</Text></View><Switch disabled={busy||!prefs.notifications} value={prefs.morningSummary&&prefs.notifications} onValueChange={v=>changeMorning({morningSummary:v})} trackColor={{false:c.border,true:c.accentSoft}} thumbColor={prefs.morningSummary&&prefs.notifications?c.accent:c.muted}/></View>
+     {prefs.morningSummary&&prefs.notifications&&<View style={s.addressRow}>
+       {[7,8,9,10].map(h=><Pressable key={h} accessibilityRole="radio" accessibilityState={{checked:prefs.morningHour===h}} disabled={busy} onPress={()=>changeMorning({morningHour:h})} style={[s.addressOption,{borderColor:prefs.morningHour===h?c.accent:c.border,backgroundColor:prefs.morningHour===h?c.accentSoft:c.background}]}><Text style={{color:prefs.morningHour===h?c.text:c.muted,fontWeight:'700',fontSize:11}}>{h}h</Text></Pressable>)}
+     </View>}
      <View style={s.separator}/>
      <View style={s.row}><View style={s.copy}><Text style={s.title}>Ocultar detalhes</Text><Text style={s.detail}>Não mostrar o nome da tarefa no título ou corpo das novas notificações.</Text></View><Switch disabled={busy} value={prefs.privatePreviews} onValueChange={v=>change('privatePreviews',v)} trackColor={{false:c.border,true:c.accentSoft}} thumbColor={prefs.privatePreviews?c.accent:c.muted}/></View>
      <View style={s.separator}/>

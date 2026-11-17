@@ -43,6 +43,8 @@ Assuntos: Estudos, Trabalho, Finanças, Casa, Saúde e Geral. Cada um tem cor pr
 - **Tarefas comuns:** aviso no horário e novas cobranças após 15 min, 1h e 3h enquanto não forem concluídas. Tarefas de **Saúde** recebem um aviso único.
 - **Rotinas:** repetem todo dia, toda semana (nos dias da semana escolhidos) ou todo mês (num dia do mês; em meses curtos vale o último dia). Um aviso em cada dia em que a rotina ocorre, no horário escolhido.
 - **Eventos:** os avisos escolhidos antes do início.
+- **Resumo da manhã:** um aviso por dia na hora escolhida (padrão 8h) com o que o dia tem e a sequência; dias vazios não avisam.
+- **Sequência:** dias seguidos com tudo feito, marcados no calendário (🔥 🌓 🌧️); o Ping comemora marcos e avisa às 20h quando está em risco.
 - **Silêncio entre 22h e 7h.**
 - Botões direto na notificação: **Concluir** e **Adiar 15 min** (eventos: **Lembrar em 10 min**). Depois do 2º adiamento o Ping fica cansado e o segundo botão vira **Reagendar** (abre a tarefa). Tocar na notificação abre o app na aba Hoje com a tarefa destacada.
 - **Sentimento do Ping:** o rosto, a cor, o texto, o estado no cabeçalho ("Ping · impaciente") e o som mudam conforme o sentimento: *animado* (na hora), *impaciente* (+1 h), *irritado* (+3 h ou 3+ atrasadas), *cansado* (adiou 2+ vezes), *com saudade* (3 dias sem abrir o app, com tarefas esperando) e *orgulhoso* (aviso das 20h quando o dia fica limpo). Os dois últimos podem ser desligados em Ajustes. Há três tons de som (normal, urgente e calmo), um canal do Android para cada.

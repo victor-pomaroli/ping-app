@@ -1,7 +1,8 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {View,Text,Pressable,ActivityIndicator,StyleSheet} from 'react-native';
 import {useRouter} from 'expo-router';
-import {CalendarDaySummary,CalendarEntry,CalendarSubtask,listCalendarDay,listCalendarMonth,completeTask} from '../store';
+import {CalendarDaySummary,CalendarEntry,CalendarSubtask,listCalendarDay,listCalendarMonth,completeTask,getStreakInfo} from '../store';
+import {dayResult,StreakInfo,type DayResult} from '../streak';
 import {useAppTheme,ThemeColors,priorityColors} from '../theme';
 import {categories} from '../templates';
 import {TaskTitle} from './TaskTitle';
@@ -10,6 +11,9 @@ import {EventCard} from './EventCard';
 const key=(d:Date)=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
 const bounds=(d:Date)=>{const start=new Date(d.getFullYear(),d.getMonth(),d.getDate());const end=new Date(start);end.setDate(end.getDate()+1);return [start.getTime(),end.getTime()] as const;};
 const WEEK=['D','S','T','Q','Q','S','S'];
+/** Ícone do dia na sequência: tudo feito, parte feita, nada feito. */
+const RESULT_ICON:Partial<Record<DayResult,string>>={all:'🔥',partial:'🌓',none:'🌧️'};
+const RESULT_LABEL:Partial<Record<DayResult,string>>={all:'tudo feito',partial:'parte feita',none:'nada feito'};
 
 /**
  * Calendário mensal leve: um resumo por dia (bolinha) e a lista do dia escolhido.
@@ -23,6 +27,7 @@ export function CalendarScreen({active,refreshKey,selected,onSelect}:{active:boo
   const router=useRouter();
   const [revision,setRevision]=useState(0);
   const [summaries,setSummaries]=useState<CalendarDaySummary[]>([]);
+  const [streak,setStreak]=useState<StreakInfo|null>(null);
   const [entries,setEntries]=useState<CalendarEntry[]>([]);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState('');
@@ -50,6 +55,13 @@ export function CalendarScreen({active,refreshKey,selected,onSelect}:{active:boo
     }).catch(e=>{if(alive)setError(String(e));});
     return()=>{alive=false;};
   },[active,monthId,revision]);
+
+  useEffect(()=>{
+    if(!active)return;
+    let alive=true;
+    getStreakInfo().then(info=>{if(alive)setStreak(info);}).catch(console.warn);
+    return()=>{alive=false;};
+  },[active,revision]);
 
   useEffect(()=>{
     if(!active)return;
@@ -90,6 +102,11 @@ export function CalendarScreen({active,refreshKey,selected,onSelect}:{active:boo
       <Pressable accessibilityRole="button" accessibilityLabel="Próximo mês" hitSlop={8} onPress={()=>changeMonth(1)} style={s.arrow}><Text style={s.arrowText}>›</Text></Pressable>
     </View>
 
+    {streak&&(streak.current>0||streak.best>0)?<View style={s.streakRow}>
+      <Text style={s.streakText}>{streak.current>0?`🔥 ${streak.current} ${streak.current===1?'dia seguido':'dias seguidos'}`:'🌧️ sem sequência agora'}</Text>
+      {streak.best>streak.current?<Text style={s.streakBest}>melhor: {streak.best}</Text>:null}
+    </View>:null}
+
     <View style={s.grid}>
       {WEEK.map((label,i)=><View key={'w'+i} style={s.weekCell}><Text style={s.weekText}>{label}</Text></View>)}
       {cells.map((d,i)=>{
@@ -98,12 +115,15 @@ export function CalendarScreen({active,refreshKey,selected,onSelect}:{active:boo
         const date=new Date(selected.getFullYear(),selected.getMonth(),d);const k=key(date);
         const isSelected=k===dayId,isToday=k===todayId;
         const day=summary.get(k);const total=day?.total??0;const events=day?.events??0;const allDone=total>0&&day!.completed===total;
-        const label=[total?`${total} tarefa${total===1?'':'s'}`:'',events?`${events} evento${events===1?'':'s'}`:''].filter(Boolean).join(' e ')||'nada marcado';
+        // Dias passados mostram o resultado da sequência no lugar da bolinha de tarefa; hoje só vira chama quando tudo está feito.
+        const result=dayResult(day?.score);
+        const icon=(k<todayId&&result!=='empty')||(isToday&&result==='all')?RESULT_ICON[result]:undefined;
+        const label=[icon?RESULT_LABEL[result]:'',total?`${total} tarefa${total===1?'':'s'}`:'',events?`${events} evento${events===1?'':'s'}`:''].filter(Boolean).join(' e ')||'nada marcado';
         return <Pressable key={i} accessibilityRole="button" accessibilityState={{selected:isSelected}} accessibilityLabel={`${d} de ${monthStart.toLocaleDateString('pt-BR',{month:'long'})}, ${label}`} onPress={()=>onSelect(date)} style={[s.cell,isSelected&&s.cellSelected,!isSelected&&isToday&&s.cellToday]}>
           <Text style={[s.dayText,(isSelected||isToday)&&s.dayStrong,isSelected&&{color:c.background}]}>{d}</Text>
           {/* Tarefas: bolinha na cor de realce. Eventos: bolinha azul ao lado. */}
           <View style={s.dots}>
-            {total>0?<View style={[s.dot,{backgroundColor:isSelected?c.background:allDone?c.muted:c.accent}]}/>:null}
+            {icon?<Text style={s.resultIcon}>{icon}</Text>:total>0?<View style={[s.dot,{backgroundColor:isSelected?c.background:allDone?c.muted:c.accent}]}/>:null}
             {events>0?<View style={[s.dot,{backgroundColor:c.event},isSelected&&{borderWidth:1,borderColor:c.background,width:6,height:6}]}/>:null}
           </View>
         </Pressable>;
@@ -111,7 +131,8 @@ export function CalendarScreen({active,refreshKey,selected,onSelect}:{active:boo
     </View>
 
     <View style={s.legend}>
-      <View style={[s.dot,{backgroundColor:c.accent,marginTop:0}]}/><Text style={s.legendText}>TAREFAS</Text>
+      <Text style={s.legendText}>🔥 TUDO FEITO  🌓 PARTE  🌧️ NADA</Text>
+      <View style={[s.dot,{backgroundColor:c.accent,marginTop:0,marginLeft:10}]}/><Text style={s.legendText}>TAREFAS</Text>
       <View style={[s.dot,{backgroundColor:c.event,marginTop:0,marginLeft:10}]}/><Text style={s.legendText}>EVENTOS</Text>
     </View>
 
@@ -170,9 +191,13 @@ const createStyles=(c:ThemeColors)=>StyleSheet.create({
   cellToday:{borderWidth:1,borderColor:c.accent},
   dayText:{color:c.text,fontWeight:'500',fontSize:14},
   dayStrong:{fontWeight:'900',color:c.accent},
-  dots:{flexDirection:'row',gap:3,height:9,alignItems:'center',marginTop:2},
+  dots:{flexDirection:'row',gap:3,height:13,alignItems:'center',marginTop:1},
   dot:{width:5,height:5,borderRadius:3},
-  legend:{flexDirection:'row',alignItems:'center',gap:5,justifyContent:'flex-end',marginTop:8},
+  resultIcon:{fontSize:11,lineHeight:13},
+  streakRow:{flexDirection:'row',alignItems:'center',justifyContent:'space-between',marginBottom:10,paddingVertical:8,paddingHorizontal:12,borderRadius:10,backgroundColor:c.accentSoft},
+  streakText:{color:c.accent,fontSize:13,fontWeight:'800'},
+  streakBest:{color:c.muted,fontSize:12,fontWeight:'700'},
+  legend:{flexDirection:'row',flexWrap:'wrap',alignItems:'center',gap:5,justifyContent:'flex-end',marginTop:8},
   legendText:{color:c.muted,fontSize:10,fontWeight:'800',letterSpacing:0.8},
   dayHead:{flexDirection:'row',alignItems:'center',gap:10,marginTop:22,marginBottom:2,paddingBottom:6},
   dayTitle:{color:c.text,fontSize:18,fontWeight:'900'},

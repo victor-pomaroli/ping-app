@@ -21,6 +21,17 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.9.0] — 2026-11-17
+
+### Adicionado
+- **Sequência:** dias seguidos com tudo feito. Um dia conta quando todas as rotinas que ocorrem nele e todas as tarefas com prazo nele foram concluídas até o fim do próprio dia (eventos não entram; dia vazio não conta nem quebra). Concluir depois do dia quebra a sequência.
+- **Calendário com ícones:** dias passados mostram 🔥 (tudo feito), 🌓 (parcial) ou 🌧️ (nada feito) no lugar do pontinho de tarefa; o ponto azul de evento continua. Faixa no topo do mês com "N dias seguidos" e a melhor sequência.
+- **Ping reage à sequência:** comemora marcos de 3, 7, 14, 30 e 100 dias, comenta com calma quando uma sequência de 3+ dias acaba, e o aviso das 20h cita a sequência ("falta 1 pra manter") quando ela está em risco.
+- **Resumo da manhã:** um aviso por dia (padrão 8h, escolha 7 a 10h em Ajustes) com tarefas, rotinas, eventos, a primeira tarefa, atrasadas e a sequência. Dias sem nada não avisam; segue a personalidade e o humor do Ping.
+
+### Alterado
+- Rotinas que não foram abertas no app em dias de ocorrência passam a registrar o dia como não feito (histórico da sequência).
+
 ## [1.8.0] — 2026-11-17
 
 ### Adicionado

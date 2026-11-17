@@ -3,7 +3,7 @@ import * as Notifications from 'expo-notifications';
 import {Platform} from 'react-native';
 import {getPreferences} from './preferences';
 import {moodFace,NotificationMood} from './faces';
-import {reminderMessage,reminderOffsets,TaskCategory,ReminderStage,eventReminderMessage,privateEventMessage,moodMessage,missYouMessage,cleanDayMessage} from './templates';
+import {reminderMessage,reminderOffsets,TaskCategory,ReminderStage,eventReminderMessage,privateEventMessage,moodMessage,missYouMessage,cleanDayMessage,streakRiskMessage,morningMessage,MorningInfo} from './templates';
 import {reminderMood,eventMood,toneOfMood,moodLabel,contextLine,MoodInput,Tone} from './ping-mood';
 
 Notifications.setNotificationHandler({
@@ -240,7 +240,7 @@ export async function cancelOrphanNotifications(loadKnown:()=>Promise<Set<string
   // Lê os agendamentos antes do banco: um lembrete criado no meio do caminho não vira "órfão".
   const pending=await Notifications.getAllScheduledNotificationsAsync();
   const known=await loadKnown();
-  const orphans=pending.filter(n=>!known.has(n.identifier)&&n.content.data?.kind!=='test'&&n.content.data?.kind!=='mood_notice').map(n=>n.identifier);
+  const orphans=pending.filter(n=>!known.has(n.identifier)&&n.content.data?.kind!=='test'&&n.content.data?.kind!=='mood_notice'&&n.content.data?.kind!=='morning_summary').map(n=>n.identifier);
   if(orphans.length)console.warn('[notifications] cancelling orphan schedules',orphans.length);
   await cancelTaskReminders(orphans);
   return orphans.length;
@@ -249,22 +249,52 @@ export async function cancelOrphanNotifications(loadKnown:()=>Promise<Set<string
  * Avisos de humor que não são de uma tarefa: saudade (dias sem abrir o app) e dia limpo (20h).
  * `data.kind` 'mood_notice' impede que a limpeza de órfãos os cancele; quem os agenda guarda o id para trocar depois.
  */
-export async function scheduleMoodNotice(kind:'ciumes'|'festa',at:number,info:{pending:number;days?:number}):Promise<string|null>{
+export async function scheduleMoodNotice(kind:'ciumes'|'festa'|'risco',at:number,info:{pending:number;days?:number;streak?:number;remaining?:number}):Promise<string|null>{
   const prefs=await getPreferences();
   if(!prefs.notifications||!prefs.moodNotices||at<=Date.now())return null;
   const permission=await Notifications.getPermissionsAsync();
   if(!permission.granted)return null;
-  const face=moodFace(prefs.personality,kind);
+  // "Sequência em risco" usa o rosto impaciente; os outros têm rosto próprio.
+  const mood:NotificationMood=kind==='risco'?'impaciente':kind;
+  const face=moodFace(prefs.personality,mood);
   const variant=Math.floor(at/86400000);
+  const body=kind==='ciumes'?missYouMessage(prefs.personality,info.pending,info.days??3,variant)
+    :kind==='risco'?streakRiskMessage(prefs.personality,info.remaining??1,info.streak??0,variant)
+    :cleanDayMessage(prefs.personality,variant,info.streak??0);
   return Notifications.scheduleNotificationAsync({
     content:{
-      title:kind==='ciumes'?'Ping sentiu sua falta':'Dia limpo',
-      body:kind==='ciumes'?missYouMessage(prefs.personality,info.pending,info.days??3,variant):cleanDayMessage(prefs.personality,variant),
-      ...(Platform.OS==='android'?{subtitle:moodLabel(prefs.personality,kind)}:{}),
-      data:{kind:'mood_notice',mood:kind,...(face?{largeIcon:face.largeIcon,smallIcon:face.smallIcon}:{})},
+      title:kind==='ciumes'?'Ping sentiu sua falta':kind==='risco'?'Sequência em risco':'Dia limpo',
+      body,
+      ...(Platform.OS==='android'?{subtitle:moodLabel(prefs.personality,mood)}:{}),
+      data:{kind:'mood_notice',mood,...(face?{largeIcon:face.largeIcon,smallIcon:face.smallIcon}:{})},
       ...(face&&Platform.OS==='android'?{color:face.color}:{}),
     },
-    trigger:dateTrigger(at,'bestEffort','calm'),
+    trigger:dateTrigger(at,'bestEffort',kind==='risco'?'normal':'calm'),
+  });
+}
+/**
+ * Resumo da manhã: um aviso por dia, na hora escolhida, com o que o dia tem. O texto é montado no momento do
+ * agendamento (por isso o app agenda os próximos dias e refaz a cada mudança). `data.kind` 'morning_summary'
+ * impede a limpeza de órfãos e permite trocar tudo de uma vez.
+ */
+export async function scheduleMorningSummary(at:number,info:MorningInfo):Promise<string|null>{
+  const prefs=await getPreferences();
+  if(!prefs.notifications||!prefs.morningSummary||at<=Date.now())return null;
+  const permission=await Notifications.getPermissionsAsync();
+  if(!permission.granted)return null;
+  const mood:NotificationMood=info.overdue>=3?'irritado':info.overdue>0?'impaciente':'animado';
+  const face=moodFace(prefs.personality,mood);
+  const variant=Math.floor(at/86400000);
+  const hidden=prefs.privatePreviews?{...info,top:undefined,topTime:undefined,firstEvent:undefined,firstEventTime:undefined}:info;
+  return Notifications.scheduleNotificationAsync({
+    content:{
+      title:'Ping · bom dia',
+      body:morningMessage(prefs.personality,hidden,variant,prefs.displayName,prefs.addressStyle),
+      ...(Platform.OS==='android'?{subtitle:moodLabel(prefs.personality,mood)}:{}),
+      data:{kind:'morning_summary',mood,...(face?{largeIcon:face.largeIcon,smallIcon:face.smallIcon}:{})},
+      ...(face&&Platform.OS==='android'?{color:face.color}:{}),
+    },
+    trigger:dateTrigger(at,'bestEffort',toneOfMood(mood)),
   });
 }
 /**

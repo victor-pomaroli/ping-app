@@ -2,9 +2,11 @@ import * as SQLite from 'expo-sqlite';
 import {getPreferences,getMeta,setMeta} from './preferences';
 import {reminderOffsets} from './templates';
 import {TaskCategory} from './templates';
-import {SNOOZE_STAGE,cancelOrphanNotifications,cancelTaskReminders,scheduleTaskReminders,scheduleSnoozeReminder,scheduleEventAlerts,scheduleEventSnooze,dismissTaskNotifications,dismissAllTaskNotifications,scheduleMoodNotice,ScheduledReminder,ReminderContext} from './notifications';
+import {SNOOZE_STAGE,cancelOrphanNotifications,cancelTaskReminders,scheduleTaskReminders,scheduleSnoozeReminder,scheduleEventAlerts,scheduleEventSnooze,dismissTaskNotifications,dismissAllTaskNotifications,scheduleMoodNotice,scheduleMorningSummary,ScheduledReminder,ReminderContext} from './notifications';
 import {MANY_OVERDUE} from './ping-mood';
 import {Recurrence,DAILY,parseRecurrence,serializeDays,occursOn,lastDayOfMonth} from './recurrence';
+import {DayScore,StreakInfo,streakInfo,brokenStreak,dayKeyAdd} from './streak';
+import type {MorningInfo} from './templates';
 export type Task={id:number;title:string;description:string;due_at:number;priority:'low'|'medium'|'high';category:TaskCategory;completed:number;completed_at:number|null;archived_at:number|null;notification_id:string|null;parent_id:number|null;daily:number;daily_active:number;daily_day:string|null;recur:string;recur_days:string;no_due:number;kind:TaskKind;ends_at:number|null;location:string;alert_offsets:string};
 /** `kind`: 'task' (tarefa) ou 'event' (evento com hora marcada, avisado antes de acontecer). */
 export type TaskKind='task'|'event';
@@ -46,6 +48,7 @@ const ready=(async()=>{
   if(!cols.some(c=>c.name==='alert_offsets'))await db.execAsync("ALTER TABLE tasks ADD COLUMN alert_offsets TEXT NOT NULL DEFAULT '[]'");
   if(!cols.some(c=>c.name==='no_due'))await db.execAsync('ALTER TABLE tasks ADD COLUMN no_due INTEGER NOT NULL DEFAULT 0');
   await db.execAsync('CREATE TABLE IF NOT EXISTS daily_history(task_id INTEGER NOT NULL,day TEXT NOT NULL,completed INTEGER NOT NULL,PRIMARY KEY(task_id,day))');
+  await db.execAsync('CREATE TABLE IF NOT EXISTS day_scores(day TEXT PRIMARY KEY,planned INTEGER NOT NULL,done INTEGER NOT NULL)');
   await db.execAsync('CREATE INDEX IF NOT EXISTS idx_tasks_parent ON tasks(parent_id)');
   await db.execAsync('CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(completed,due_at)');
   await db.execAsync('CREATE INDEX IF NOT EXISTS idx_tasks_archive ON tasks(archived_at,completed_at)');
@@ -86,21 +89,31 @@ export async function listTaskPage(limit=50,offset=0,category?:TaskCategory,kind
 }
 // Calendar queries: indexed timestamp ranges, root tasks only, no N+1 lookups.
 /** `total`/`completed` contam tarefas; `events` conta eventos (bolinha de outra cor). */
-export type CalendarDaySummary={day:string;total:number;completed:number;events:number};
+export type CalendarDaySummary={day:string;total:number;completed:number;events:number;score?:DayScore};
 export type CalendarSubtask={task:Task;completed:boolean};
 export type CalendarEntry={task:Task;occurrenceDay:string;completed:boolean;routine:boolean;event:boolean;subtasks:CalendarSubtask[]};
 function calendarKey(timestamp:number){return localDay(new Date(timestamp));}
 /** Resumo do mês para as bolinhas: tarefas com data e eventos. Rotinas diárias ficam de fora para as datas se destacarem. */
 export async function listCalendarMonth(start:number,end:number):Promise<CalendarDaySummary[]>{
+  await closeDays();
   const db=await ready;
   const ordinary=await db.getAllAsync<{due_at:number;completed:number;kind:TaskKind}>(
     'SELECT due_at,completed,kind FROM tasks WHERE parent_id IS NULL AND daily=0 AND no_due=0 AND archived_at IS NULL AND due_at>=? AND due_at<?',
     start,end);
   const summaries=new Map<string,CalendarDaySummary>();
+  const row=(day:string)=>summaries.get(day)??{day,total:0,completed:0,events:0};
   for(const task of ordinary){
-    const day=calendarKey(task.due_at);const row=summaries.get(day)??{day,total:0,completed:0,events:0};
-    if(task.kind==='event')row.events++;else{row.total++;if(task.completed)row.completed++;}
-    summaries.set(day,row);
+    const day=calendarKey(task.due_at);const item=row(day);
+    if(task.kind==='event')item.events++;else{item.total++;if(task.completed)item.completed++;}
+    summaries.set(day,item);
+  }
+  // Placar dos dias já fechados (alimenta os ícones da sequência) e o de hoje, ao vivo.
+  const scores=await db.getAllAsync<{day:string;planned:number;done:number}>('SELECT day,planned,done FROM day_scores WHERE day>=? AND day<=?',calendarKey(start),calendarKey(end-1));
+  for(const sc of scores){if(sc.planned>0){const item=row(sc.day);item.score={planned:sc.planned,done:sc.done};summaries.set(sc.day,item);}}
+  const today=localDay();
+  if(today>=calendarKey(start)&&today<=calendarKey(end-1)){
+    const live=await todayScore();
+    if(live.planned>0){const item=row(today);item.score=live;summaries.set(today,item);}
   }
   return [...summaries.values()];
 }
@@ -234,6 +247,7 @@ export async function saveTaskGroup(task:TaskInput,children:ChildInput[],id?:num
     const fresh=await getTask(parent.id);
     if(fresh)try{await replaceReminders(fresh.id,fresh,!!fresh.completed);}catch(e){console.warn(e);return {...parent,reminderError:true};}
   }
+  await syncMorningSummaries().catch(console.warn);
   await refreshWidget();
   return parent;
 }
@@ -301,6 +315,7 @@ export async function syncTaskCompletion(task:Task,completed:boolean){
   await replaceReminders(task.id,task,completed);
   if(completed)await dismissTaskNotifications(task.id);
   await syncMoodNotices().catch(console.warn);
+  await syncMorningSummaries().catch(console.warn);
 }
 export async function completeTask(id:number,completed:boolean){
   const task=await setTaskCompleted(id,completed);
@@ -336,6 +351,7 @@ export async function deleteTask(id:number,parentGoing=false){
   // Apagar uma subtarefa muda a contagem citada no aviso da principal.
   const parent=removed?.parent_id?await getTask(removed.parent_id):null;
   if(parent)await replaceReminders(parent.id,parent,!!parent.completed).catch(console.warn);
+  if(!parentGoing)await syncMorningSummaries().catch(console.warn);
   await refreshWidget();
 }
 const REMINDER_CONTENT_VERSION='4-moods';
@@ -370,6 +386,7 @@ export async function refreshMoodState(){
   const signature=(await overdueTodayCount())>=MANY_OVERDUE?'hot':'calm';
   if(await getMeta('moodSig')!==signature){await rescheduleAllReminders();await setMeta('moodSig',signature);}
   await syncMoodNotices();
+  await syncMorningSummaries().catch(console.warn);
 }
 const MISS_DAYS=3;
 /**
@@ -393,9 +410,59 @@ export async function syncMoodNotices(){
   const endOfToday=new Date();endOfToday.setHours(23,59,59,999);
   const left=(await db.getFirstAsync<{n:number}>(`SELECT COUNT(*) AS n FROM tasks WHERE ${base} AND due_at<=?`,endOfToday.getTime()))?.n??0;
   const doneToday=(await db.getFirstAsync<{n:number}>("SELECT COUNT(*) AS n FROM tasks WHERE parent_id IS NULL AND completed=1 AND completed_at>=?",startOfToday()))?.n??0;
+  const at=new Date();at.setHours(20,0,0,0);
+  const streak=await getStreakInfo().catch(()=>null);
   if(left===0&&doneToday>0){
-    const at=new Date();at.setHours(20,0,0,0);
-    await scheduleMoodNotice('festa',at.getTime(),{pending:0});
+    await scheduleMoodNotice('festa',at.getTime(),{pending:0,streak:streak?.current??0});
+  }else if(streak?.atRisk&&streak.remaining>0&&streak.remaining<=2){
+    // Sequência em risco: falta pouco para o dia contar. Às 20h, para ainda dar tempo.
+    await scheduleMoodNotice('risco',at.getTime(),{pending:streak.remaining,remaining:streak.remaining,streak:streak.current});
+  }
+}
+const MORNING_DAYS=7;
+const hhmm=(ms:number)=>new Date(ms).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+/** O que o dia `day` tem: tarefas pendentes com data, rotinas que ocorrem, eventos e atrasadas de antes. */
+async function morningInfo(day:string,streak:number):Promise<MorningInfo>{
+  const db=await ready;const [start,end]=dayBounds(day);const date=new Date(start);
+  const tasks=await db.getAllAsync<Task>("SELECT * FROM tasks WHERE parent_id IS NULL AND daily=0 AND no_due=0 AND kind='task' AND completed=0 AND archived_at IS NULL AND due_at>=? AND due_at<? ORDER BY CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,due_at ASC",start,end);
+  const routines=(await db.getAllAsync<Task>('SELECT * FROM tasks WHERE daily=1 AND daily_active=1 AND parent_id IS NULL AND archived_at IS NULL')).filter(t=>occursOn(taskRecurrence(t),date));
+  const events=await db.getAllAsync<Task>("SELECT * FROM tasks WHERE parent_id IS NULL AND kind='event' AND archived_at IS NULL AND due_at>=? AND due_at<? ORDER BY due_at ASC",start,end);
+  const overdue=(await db.getFirstAsync<{n:number}>("SELECT COUNT(*) AS n FROM tasks WHERE parent_id IS NULL AND completed=0 AND no_due=0 AND kind='task' AND daily=0 AND archived_at IS NULL AND due_at<?",start))?.n??0;
+  return {tasks:tasks.length,routines:routines.length,events:events.length,overdue,
+    top:tasks[0]?.title.slice(0,40),topTime:tasks[0]?hhmm(tasks[0].due_at):undefined,
+    firstEvent:events[0]?.title.slice(0,40),firstEventTime:events[0]?hhmm(events[0].due_at):undefined,streak};
+}
+let morningRun:Promise<void>|null=null;let morningAgain=false;
+/**
+ * Resumo da manhã: agenda os próximos dias na hora escolhida (só os que têm algo) e troca os antigos.
+ * Roda ao abrir o app e a cada mudança nas tarefas; chamadas simultâneas viram uma (e uma repetição).
+ */
+export function syncMorningSummaries():Promise<void>{
+  if(morningRun){morningAgain=true;return morningRun;}
+  morningRun=(async()=>{
+    try{
+      do{morningAgain=false;await runMorningSync();}while(morningAgain);
+    }finally{morningRun=null;}
+  })();
+  return morningRun;
+}
+async function runMorningSync(){
+  const Notifications=await import('expo-notifications');
+  const scheduled=await Notifications.getAllScheduledNotificationsAsync();
+  await cancelTaskReminders(scheduled.filter(n=>n.content.data?.kind==='morning_summary').map(n=>n.identifier));
+  const prefs=await getPreferences();
+  if(!prefs.notifications||!prefs.morningSummary)return;
+  const streak=await getStreakInfo().catch(()=>null);
+  const today=localDay();const now=Date.now();let first=true;
+  for(let i=0;i<MORNING_DAYS;i++){
+    const day=dayKeyAdd(today,i);const [y,m,d]=day.split('-').map(Number);
+    const at=new Date(y,m-1,d,prefs.morningHour,0,0,0).getTime();
+    if(at<=now)continue;
+    // Só a primeira manhã cita a sequência: amanhã ela só vale se hoje fechar completo.
+    const keep=streak?(i===0||streak.todayDone||streak.today.planned===0?streak.current:0):0;
+    const info=await morningInfo(day,first?keep:0);first=false;
+    if(!info.tasks&&!info.routines&&!info.events&&!info.overdue)continue;
+    await scheduleMorningSummary(at,info);
   }
 }
 export async function reconcileReminders(){
@@ -467,6 +534,58 @@ export async function deleteAllTasks(){
   await refreshWidget();
 }
 
+/** Início e fim (exclusivo) de um dia 'YYYY-MM-DD' no fuso do aparelho. */
+function dayBounds(day:string){const [y,m,d]=day.split('-').map(Number);return [new Date(y,m-1,d).getTime(),new Date(y,m-1,d+1).getTime()] as const;}
+const STREAK_LOOKBACK=90;
+/**
+ * Fecha o placar dos dias que já acabaram (planejado x feito) e o guarda em day_scores, para a sequência
+ * não mudar se tarefas forem editadas ou apagadas depois. Rotinas vêm do histórico (só tem os dias em que ocorreram);
+ * tarefas com data contam como feitas se foram concluídas até o fim do próprio dia. Eventos ficam de fora.
+ */
+export async function closeDays(){
+  await syncDailyTasks();
+  const db=await ready;
+  const today=localDay(),yesterday=dayKeyAdd(today,-1);
+  const last=(await db.getFirstAsync<{day:string|null}>('SELECT MAX(day) AS day FROM day_scores'))?.day;
+  const from=last?dayKeyAdd(last,1):dayKeyAdd(today,-STREAK_LOOKBACK);
+  if(from>yesterday)return;
+  const startMs=dayBounds(from)[0],endMs=dayBounds(today)[0];
+  const tasks=await db.getAllAsync<{due_at:number;completed:number;completed_at:number|null}>("SELECT due_at,completed,completed_at FROM tasks WHERE parent_id IS NULL AND daily=0 AND no_due=0 AND kind='task' AND due_at>=? AND due_at<?",startMs,endMs);
+  const history=await db.getAllAsync<{day:string;completed:number}>('SELECT day,completed FROM daily_history WHERE day>=? AND day<=?',from,yesterday);
+  const scores=new Map<string,DayScore>();
+  const bump=(day:string,done:number)=>{const x=scores.get(day)??{planned:0,done:0};x.planned++;x.done+=done;scores.set(day,x);};
+  for(const t of tasks){const day=localDay(new Date(t.due_at));bump(day,t.completed&&t.completed_at!==null&&t.completed_at<dayBounds(day)[1]?1:0);}
+  for(const h of history)bump(h.day,h.completed?1:0);
+  await db.withTransactionAsync(async()=>{
+    for(let day=from;day<=yesterday;day=dayKeyAdd(day,1)){
+      const x=scores.get(day)??{planned:0,done:0};
+      await db.runAsync('INSERT OR REPLACE INTO day_scores(day,planned,done) VALUES(?,?,?)',day,x.planned,x.done);
+    }
+  });
+}
+/** Placar de hoje ao vivo: rotinas que ocorrem hoje e tarefas com data hoje. */
+export async function todayScore():Promise<DayScore>{
+  const db=await ready;const now=new Date();
+  const [start,end]=dayBounds(localDay(now));
+  const routines=(await db.getAllAsync<Task>('SELECT * FROM tasks WHERE daily=1 AND daily_active=1 AND parent_id IS NULL AND archived_at IS NULL')).filter(t=>occursOn(taskRecurrence(t),now));
+  const tasks=await db.getAllAsync<{completed:number}>("SELECT completed FROM tasks WHERE parent_id IS NULL AND daily=0 AND no_due=0 AND kind='task' AND archived_at IS NULL AND due_at>=? AND due_at<?",start,end);
+  return {planned:routines.length+tasks.length,done:routines.filter(t=>t.completed).length+tasks.filter(t=>t.completed).length};
+}
+async function loadScores(){
+  const db=await ready;
+  const rows=await db.getAllAsync<{day:string;planned:number;done:number}>('SELECT day,planned,done FROM day_scores WHERE day>=?',dayKeyAdd(localDay(),-400));
+  return new Map(rows.map(r=>[r.day,{planned:r.planned,done:r.done}]));
+}
+/** Sequência atual, melhor sequência e situação de hoje. */
+export async function getStreakInfo():Promise<StreakInfo>{
+  await closeDays();
+  return streakInfo(await loadScores(),localDay(),await todayScore());
+}
+/** Tamanho da sequência (≥3) que o dia de ontem quebrou, para o Ping reagir uma vez; 0 se não quebrou. */
+export async function getBrokenStreak():Promise<number>{
+  await closeDays();
+  return brokenStreak(await loadScores(),localDay(),3);
+}
 export const localDay=(date=new Date())=>[date.getFullYear(),String(date.getMonth()+1).padStart(2,'0'),String(date.getDate()).padStart(2,'0')].join('-');
 export async function syncDailyTasks(){
   const db=await ready;
@@ -474,6 +593,13 @@ export async function syncDailyTasks(){
   const roots=await db.getAllAsync<Task>('SELECT * FROM tasks WHERE daily=1 AND daily_active=1 AND parent_id IS NULL AND (daily_day IS NULL OR daily_day<>?)',today);
   for(const task of roots){
     if(task.daily_day){
+      // Dias sem abrir o app: a rotina que ocorreu e não foi feita entra no histórico como não feita.
+      const recur=taskRecurrence(task);
+      let gap=dayKeyAdd(task.daily_day,1);
+      for(let n=0;gap<today&&n<STREAK_LOOKBACK;n++,gap=dayKeyAdd(gap,1)){
+        const [gy,gm,gd]=gap.split('-').map(Number);
+        if(occursOn(recur,new Date(gy,gm-1,gd)))await db.runAsync('INSERT OR IGNORE INTO daily_history(task_id,day,completed) VALUES(?,?,0)',task.id,gap);
+      }
       const [y,m,d]=task.daily_day.split('-').map(Number);
       // Rotina semanal/mensal só tem histórico nos dias em que ocorreu.
       if(occursOn(taskRecurrence(task),new Date(y,m-1,d)))await db.runAsync('INSERT OR IGNORE INTO daily_history(task_id,day,completed) VALUES(?,?,?)',task.id,task.daily_day,task.completed?1:0);
