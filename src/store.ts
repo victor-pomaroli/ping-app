@@ -7,7 +7,7 @@ import {MANY_OVERDUE} from './ping-mood';
 import {Recurrence,DAILY,parseRecurrence,serializeDays,occursOn,lastDayOfMonth} from './recurrence';
 import {DayScore,StreakInfo,streakInfo,brokenStreak,dayKeyAdd} from './streak';
 import type {MorningInfo} from './templates';
-import {ensureRewardTables,grantTaskReward,getBalance} from './rewards';
+import {ensureRewardTables,grantTaskReward,getBalance,grantTestCoins} from './rewards';
 import {ensureShopTables,purchaseItem,equipItem,unequipSlot,getRoom,type RoomView,type SlotId,type PurchaseResult} from './shop';
 import {createBackup,parseBackup,restoreBackup,type RestoreSummary} from './backup';
 import {ensureProgressTables,loadStats,unlockAchievements,listUnlocked,friendshipLevel,ACHIEVEMENTS,type FriendshipInfo} from './progress';
@@ -284,10 +284,20 @@ export async function saveTask(task:TaskInput,id?:number){
 }
 /** Recompensa de uma conclusão. Nunca pode quebrar o fluxo de tarefas: qualquer falha só vira aviso no log. */
 async function rewardCompletion(db:Awaited<typeof ready>,task:Task){
+  try{await grantTaskReward(db,task,localDay());}catch(e){console.warn('[rewards] grant failed',e);}
+}
+/**
+ * Conquistas novas depois de uma conclusão. Fora do caminho rápido: só calcula a sequência (consulta cara)
+ * se ainda houver conquista de sequência bloqueada, e nem consulta nada quando todas já foram desbloqueadas.
+ */
+async function checkAchievements(){
   try{
-    const r=await grantTaskReward(db,task,localDay());
-    if(!r.duplicate&&!r.ineligible)await unlockAchievements(db,await loadStats(db,(await loadStreakBest())));
-  }catch(e){console.warn('[rewards] grant failed',e);}
+    const db=await ready;
+    const unlocked=new Set(await listUnlocked(db));
+    if(unlocked.size>=ACHIEVEMENTS.length)return;
+    const needStreak=ACHIEVEMENTS.some(a=>a.id.startsWith('streak_')&&!unlocked.has(a.id));
+    await unlockAchievements(db,await loadStats(db,needStreak?await loadStreakBest():0));
+  }catch(e){console.warn('[achievements] check failed',e);}
 }
 async function loadStreakBest(){
   const scores=await loadScores(),today=await todayScore();
@@ -347,11 +357,28 @@ export async function syncTaskCompletion(task:Task,completed:boolean){
   await syncMoodNotices().catch(console.warn);
   await syncMorningSummaries().catch(console.warn);
 }
-export async function completeTask(id:number,completed:boolean){
+/** Fila única dos efeitos lentos: roda um de cada vez e na ordem, para concluir e desfazer rápido não embaralhar lembretes. */
+let effectsChain:Promise<unknown>=Promise.resolve();
+function runSlowEffects(task:Task,completed:boolean):Promise<void>{
+  const job=effectsChain.then(async()=>{
+    await syncTaskCompletion(task,completed);
+    await checkAchievements();
+    await refreshWidget();
+  });
+  effectsChain=job.catch(e=>console.warn('[completion] effects failed',e));
+  return job;
+}
+/**
+ * Conclui ou reabre uma tarefa. Por padrão espera tudo terminar (necessário no botão da notificação, onde o
+ * processo pode ser encerrado logo depois). Com `defer=true` (telas), volta assim que o banco é gravado e deixa
+ * lembretes, bandeja, conquistas e widget para a fila, para o cartão responder sem esperar as APIs nativas.
+ */
+export async function completeTask(id:number,completed:boolean,defer=false){
   const task=await setTaskCompleted(id,completed);
   if(!task)return;
-  await syncTaskCompletion(task,completed);
-  await refreshWidget();
+  const effects=runSlowEffects(task,completed);
+  if(defer){effects.catch(e=>console.warn('[completion] deferred effects failed',e));return;}
+  await effects;
 }
 /** Botão "Adiar": tira o aviso da bandeja e agenda um novo daqui a alguns minutos. */
 export async function snoozeTask(id:number){
@@ -690,3 +717,8 @@ export async function getRoomView():Promise<RoomView>{return getRoom(await ready
 export async function buyRoomItem(itemId:string):Promise<PurchaseResult>{return purchaseItem(await ready,itemId);}
 export async function equipRoomItem(itemId:string):Promise<boolean>{return equipItem(await ready,itemId);}
 export async function unequipRoomSlot(slot:SlotId):Promise<void>{await unequipSlot(await ready,slot);}
+
+/** Saldo de moedas (para o atalho da aba Hoje). */
+export async function getCoinBalance():Promise<number>{return getBalance(await ready);}
+/** Só para teste (Ajustes): ganha moedas sem concluir tarefa. */
+export async function addTestCoins(amount:number):Promise<number>{return grantTestCoins(await ready,amount);}

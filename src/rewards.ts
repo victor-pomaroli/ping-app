@@ -80,3 +80,15 @@ export async function grantTaskReward(db:RewardDb,task:RewardTask,day:string,now
   });
   return result;
 }
+
+/** Ferramenta de teste (Ajustes): credita moedas sem concluir tarefa. Não conta para XP, conquistas, teto nem bônus. */
+export async function grantTestCoins(db:RewardDb,amount:number,now=Date.now()):Promise<number>{
+  const coins=Math.max(1,Math.min(1000,Math.floor(amount)));
+  await db.withTransactionAsync(async()=>{
+    const ev=await db.runAsync(
+      "INSERT INTO reward_events(source_type,source_id,event_type,occurred_at,reward_date,idempotency_key) VALUES('test',NULL,'test_grant',?,?,?)",
+      now,new Date(now).toISOString().slice(0,10),`test:${now}:${Math.random().toString(36).slice(2,8)}`);
+    await db.runAsync('INSERT INTO wallet_transactions(event_id,amount,reason,created_at) VALUES(?,?,?,?)',ev.lastInsertRowId,coins,'teste',now);
+  });
+  return getBalance(db);
+}

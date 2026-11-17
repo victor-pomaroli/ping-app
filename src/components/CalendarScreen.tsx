@@ -95,7 +95,7 @@ export function CalendarScreen({active,refreshKey,selected,onSelect}:{active:boo
     // Rotina só pode ser marcada no próprio dia; o histórico dos outros dias é só leitura.
     if(entry.routine&&dayId!==todayId)return;
     const target=sub??entry;
-    try{await completeTask(target.task.id,!target.completed);monthCache.current.clear();dayCache.current.clear();setRevision(x=>x+1);}
+    try{await completeTask(target.task.id,!target.completed,true);monthCache.current.clear();dayCache.current.clear();setRevision(x=>x+1);}
     catch(e){setError(String(e));}
   }
 

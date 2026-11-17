@@ -5,6 +5,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {showError} from '../src/components/PingDialog';
 import {getProgress,type ProgressView} from '../src/store';
 import {useAppTheme} from '../src/theme';
+import {CoinIcon} from '../src/components/CoinIcon';
 
 /** Progresso: moedas, amizade com o Ping e conquistas. Tela opcional: nada aqui bloqueia tarefas. */
 export default function Progress(){
@@ -21,7 +22,7 @@ export default function Progress(){
     <Text style={{color:c.muted,marginBottom:18}}>Concluir tarefas rende moedas e amizade. Dia sem usar não tira nada.</Text>
     <View accessible accessibilityLabel={`${view.balance} moedas`} style={{padding:17,backgroundColor:c.surface,borderRadius:10,borderWidth:1,borderColor:c.border}}>
       <Text style={{color:c.muted,fontSize:12,fontWeight:'800'}}>MOEDAS</Text>
-      <Text style={{color:c.text,fontSize:34,fontWeight:'900'}}>{view.balance}</Text>
+      <View style={{flexDirection:'row',alignItems:'center',gap:10}}><CoinIcon size={30}/><Text style={{color:c.text,fontSize:34,fontWeight:'900'}}>{view.balance}</Text></View>
     </View>
     <View accessible accessibilityLabel={`Amizade nível ${f.level}, ${f.name}`} style={{marginTop:12,padding:17,backgroundColor:c.surface,borderRadius:10,borderWidth:1,borderColor:c.border}}>
       <Text style={{color:c.muted,fontSize:12,fontWeight:'800'}}>AMIZADE · NÍVEL {f.level}</Text>

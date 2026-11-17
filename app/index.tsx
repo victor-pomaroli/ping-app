@@ -9,6 +9,7 @@ import {useAppTheme,ThemeColors,categoryColors,priorityColors,isDarkAppearance} 
 import {PingDialog} from '../src/components/PingDialog';
 import {CalendarScreen} from '../src/components/CalendarScreen';
 import {SummaryNote} from '../src/components/SummaryNote';
+import {RewardsBar} from '../src/components/RewardsBar';
 import {noteTouch} from '../src/ping-activity';
 import {TaskTitle} from '../src/components/TaskTitle';
 import {sortTasks,sectionTasks} from '../src/task-order';
@@ -167,7 +168,7 @@ export default function Home(){
     if(next)setCompleteKey(k=>k+1);
     try{
       if(motionOn)await new Promise<void>(resolve=>setTimeout(resolve,COMPLETE_SETTLE));
-      await completeTask(t.id,next);
+      await completeTask(t.id,next,true);
       await refresh();
     }
     catch(e){setFeedback({title:'Não deu certo.',message:String(e)});}
@@ -335,6 +336,7 @@ export default function Home(){
       {page==='home'?<Text style={s.heading}>{'Seu dia.\nSem desculpas.'}</Text>:page==='calendar'?<Text style={s.heading}>{'Seu tempo.\nSeu ritmo.'}</Text>:null}
       {page==='home'?<>
         <SummaryNote appearance={appearance} page={c.background} left={overdue.length+todayAhead.length} overdue={overdue.length} today={todayAhead.length} done={completedToday.length} celebrateKey={confettiKey} personality={personality} active={tab==='home'} completeKey={completeKey} refreshKey={refreshKey}/>
+        <RewardsBar colors={c} refreshKey={tasks}/>
         {/* Ordem de urgência: atrasadas → agenda → radar. Seções vazias não aparecem. */}
         {overdue.length?<><AttentionPulse active={tab==='home'}>{sectionHead('PASSOU DA HORA',overdue.length,c.danger)}</AttentionPulse>{groupedCards(overdue,tasks,{page:'home'})}</>:null}
         {agenda.length?<>{sectionHead('AGENDA DE HOJE',agenda.length)}{groupedCards(agenda,tasks,{dayKnown:true,page:'home'})}</>:null}

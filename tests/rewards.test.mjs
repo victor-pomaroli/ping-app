@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {ensureRewardTables,grantTaskReward,getBalance,earnedOnDay,weekBounds,coinsForTask,taskRewardKey,REWARD_CONFIG} from '../src/rewards.ts';
+import {grantTestCoins,ensureRewardTables,grantTaskReward,getBalance,earnedOnDay,weekBounds,coinsForTask,taskRewardKey,REWARD_CONFIG} from '../src/rewards.ts';
 
 /** Adaptador mínimo: expõe o DatabaseSync do Node com a mesma forma do expo-sqlite. */
 function makeDb(){
@@ -81,4 +81,13 @@ test('falha no meio da transação não deixa evento órfão nem moeda sem event
   assert.equal(await getBalance(db),0);
   assert.equal(db.raw.prepare('SELECT COUNT(*) c FROM reward_events').get().c,0);
   assert.equal((await grantTaskReward(db,task(11),'2026-11-17')).coins,5); // pode tentar de novo
+});
+
+test('moedas de teste somam ao saldo sem virar ganho de tarefa nem bônus',async()=>{
+  const db=await fresh();
+  assert.equal(await grantTestCoins(db,50),50);
+  assert.equal(await grantTestCoins(db,1e9),1050); // limitado a 1000 por toque
+  assert.equal(await earnedOnDay(db,new Date().toISOString().slice(0,10)),0);
+  const r=await grantTaskReward(db,task(1),'2026-11-17');
+  assert.equal(r.coins,5);assert.equal(await getBalance(db),1055);
 });
