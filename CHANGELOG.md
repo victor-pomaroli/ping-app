@@ -21,6 +21,18 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.7.2] — 2026-11-17
+
+### Adicionado
+- **Novo ícone do app:** o Ping empoleirado num post-it com checks e raios de som, no lugar do desenho antigo. Há uma versão para cada personalidade (De Boa, Debochado e Sem Paciência) e o ícone do app troca sozinho ao mudar a personalidade em Ajustes. A troca aparece quando você sai do app e depende do launcher (alguns piscam a tela inicial).
+- **Novo ícone da barra de status:** silhueta do novo sino com raios e a expressão do sentimento (sorrindo, sério ou exclamação), com arquivos para todas as densidades de tela.
+
+### Alterado
+- O ícone adaptativo do Android foi redimensionado para caber na zona segura (círculo, quadrado arredondado e outras máscaras).
+
+### Observação
+- O ícone antigo na tela inicial pode sumir depois da atualização; basta arrastar o Ping de novo da gaveta de apps.
+
 ## [1.7.1] — 2026-11-16
 
 ### Alterado

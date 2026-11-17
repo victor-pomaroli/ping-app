@@ -8,6 +8,7 @@ import * as Notifications from 'expo-notifications';
 import {needsOnboarding,getPreferences} from '../src/preferences';
 import {setSoundsEnabled} from '../src/ping-sounds';
 import {markOpened} from '../src/ping-presence';
+import {syncAppIcon} from '../src/app-icon';
 import {initDB,reconcileReminders,refreshMoodState} from '../src/store';
 import {setupNotifications,ensureNotificationPermission} from '../src/notifications';
 import {handleNotificationResponse} from '../src/notification-actions';
@@ -35,6 +36,8 @@ function AppStack(){
     getPreferences().then(p=>setSoundsEnabled(p.sounds)).catch(console.warn);
     markOpened();
     const sub=AppState.addEventListener('change',state=>{
+      // Troca o ícone do app para o da personalidade só quando o app vai para o fundo (evita piscar na tela).
+      if(state==='background'){getPreferences().then(p=>syncAppIcon(p.personality)).catch(console.warn);return;}
       if(state!=='active')return;
       markOpened().then(()=>refreshMoodState()).catch(console.warn);
     });

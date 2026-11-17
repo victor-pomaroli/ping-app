@@ -2,13 +2,14 @@
   "expo": {
     "name": "Ping",
     "slug": "ping",
-    "version": "1.7.1",
+    "version": "1.7.2",
     "scheme": "ping",
     "icon": "./assets/icon.png",
     "plugins": [
       "expo-router",
       "expo-sqlite",
       "./plugins/with-ping-faces",
+      "./plugins/with-ping-app-icons",
       [
         "expo-notifications",
         {
@@ -43,9 +44,10 @@
     ],
     "android": {
       "package": "com.example.ping",
-      "versionCode": 10701,
+      "versionCode": 10702,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundImage": "./assets/adaptive-background.png",
         "backgroundColor": "#10301B"
       },
       "permissions": [

@@ -153,7 +153,7 @@ export function SettingsScreen({onDataDeleted}:{onDataDeleted:()=>void}){
      </View>
    </View>
    <Text style={s.section}>PERSONALIDADE DO PING</Text>
-   <Text style={s.detail}>Escolha como o Ping vai cobrar suas tarefas. A preferência fica salva e atualiza os lembretes futuros.</Text>
+   <Text style={s.detail}>Escolha como o Ping vai cobrar suas tarefas. A preferência fica salva, atualiza os lembretes futuros e troca o ícone do app (a troca aparece quando você sair do Ping).</Text>
    <View style={s.personalityList}>
     {([
      ['debochado','😏 Debochado','O Ping original: sarcasmo e ironia.','A responsabilidade bateu de novo. Vai atender?'],
