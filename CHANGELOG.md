@@ -22,6 +22,7 @@ A cada versão:
 ### Adicionado
 - **Moedas, amizade e conquistas** (base): concluir uma tarefa rende moedas (teto diário e bônus de consistência semanal), alimenta a amizade com o Ping (5 níveis) e desbloqueia 10 conquistas. Tela "Progresso com o Ping" em Ajustes. Nada é punido e criar, editar e concluir tarefas continuam como sempre.
 - **Backup e restauração** por arquivo em Ajustes, grátis e sem nuvem: tarefas, rotinas, moedas e conquistas. Usa `expo-sharing` e `expo-document-picker` (**exige novo build nativo**).
+- **Cantinho do Ping**: quartinho opcional (atalho em Progresso) para decorar com moedas: 6 itens cosméticos em 5 espaços, compra com confirmação, usar e remover. Todos os itens são grátis; nenhum dá vantagem.
 - Estrutura interna do Ping Pro com o paywall desligado: nada muda para quem usa o app hoje.
 
 ## [1.9.1] — 2026-11-17

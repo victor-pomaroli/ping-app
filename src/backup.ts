@@ -10,7 +10,9 @@ import type {RewardDb} from './rewards.ts';
 export const BACKUP_FORMAT='ping-backup';
 export const BACKUP_VERSION=1;
 /** Ordem importa na restauração (eventos antes das transações que apontam para eles). */
-export const BACKUP_TABLES=['tasks','daily_history','day_scores','app_preferences','reward_events','wallet_transactions','achievements_unlocked'] as const;
+export const BACKUP_TABLES=['tasks','daily_history','day_scores','app_preferences','reward_events','wallet_transactions','achievements_unlocked','inventory','room_slots'] as const;
+/** Tabelas que backups antigos (antes da loja) não trazem: ficam vazias em vez de recusar o arquivo. */
+const OPTIONAL_TABLES:readonly string[]=['inventory','room_slots'];
 const SKIP_PREFERENCES=['meta:pro'];
 export type Backup={format:string;version:number;createdAt:number;appVersion:string;tables:Record<string,Record<string,unknown>[]>};
 export type RestoreSummary={tasks:number;coinsBalance:number;achievements:number};
@@ -37,6 +39,7 @@ export function parseBackup(text:string):Backup{
   if(typeof data.version!=='number'||data.version>BACKUP_VERSION)throw new Error('Este backup é de uma versão mais nova do Ping. Atualize o app e tente de novo.');
   if(!data.tables||typeof data.tables!=='object')throw new Error('O backup está incompleto.');
   for(const t of BACKUP_TABLES){
+    if(data.tables[t]===undefined&&OPTIONAL_TABLES.includes(t))data.tables[t]=[];
     if(!Array.isArray(data.tables[t]))throw new Error(`O backup está incompleto (faltou ${t}).`);
   }
   return data as Backup;

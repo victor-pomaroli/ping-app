@@ -8,6 +8,7 @@ import {Recurrence,DAILY,parseRecurrence,serializeDays,occursOn,lastDayOfMonth} 
 import {DayScore,StreakInfo,streakInfo,brokenStreak,dayKeyAdd} from './streak';
 import type {MorningInfo} from './templates';
 import {ensureRewardTables,grantTaskReward,getBalance} from './rewards';
+import {ensureShopTables,purchaseItem,equipItem,unequipSlot,getRoom,type RoomView,type SlotId,type PurchaseResult} from './shop';
 import {createBackup,parseBackup,restoreBackup,type RestoreSummary} from './backup';
 import {ensureProgressTables,loadStats,unlockAchievements,listUnlocked,friendshipLevel,ACHIEVEMENTS,type FriendshipInfo} from './progress';
 export type Task={id:number;title:string;description:string;due_at:number;priority:'low'|'medium'|'high';category:TaskCategory;completed:number;completed_at:number|null;archived_at:number|null;notification_id:string|null;parent_id:number|null;daily:number;daily_active:number;daily_day:string|null;recur:string;recur_days:string;no_due:number;kind:TaskKind;ends_at:number|null;location:string;alert_offsets:string};
@@ -58,6 +59,7 @@ const ready=(async()=>{
   await db.execAsync('CREATE INDEX IF NOT EXISTS idx_tasks_active_category ON tasks(archived_at,category,completed,due_at,id)');
   await ensureRewardTables(db);
   await ensureProgressTables(db);
+  await ensureShopTables(db);
   await db.runAsync('UPDATE tasks SET completed_at=due_at WHERE completed=1 AND completed_at IS NULL');
   await db.runAsync('UPDATE tasks SET archived_at=completed_at+2592000000 WHERE completed=1 AND archived_at IS NULL AND completed_at<=?',Date.now()-2592000000);
   return db;
@@ -682,3 +684,9 @@ export async function restoreBackupText(text:string):Promise<RestoreSummary>{
   await refreshWidget();
   return summary;
 }
+
+/** Cantinho do Ping: saldo, catálogo (com posse) e o que está equipado. */
+export async function getRoomView():Promise<RoomView>{return getRoom(await ready);}
+export async function buyRoomItem(itemId:string):Promise<PurchaseResult>{return purchaseItem(await ready,itemId);}
+export async function equipRoomItem(itemId:string):Promise<boolean>{return equipItem(await ready,itemId);}
+export async function unequipRoomSlot(slot:SlotId):Promise<void>{await unequipSlot(await ready,slot);}

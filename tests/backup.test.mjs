@@ -4,6 +4,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {ensureRewardTables,grantTaskReward,getBalance} from '../src/rewards.ts';
 import {ensureProgressTables,unlockAchievements,loadStats} from '../src/progress.ts';
 import {createBackup,parseBackup,restoreBackup} from '../src/backup.ts';
+import {ensureShopTables} from '../src/shop.ts';
 
 function makeDb(){
   const raw=new DatabaseSync(':memory:');
@@ -23,7 +24,7 @@ async function app(){
   CREATE TABLE task_notifications(notification_id TEXT PRIMARY KEY,task_id INTEGER NOT NULL,stage INTEGER NOT NULL,scheduled_at INTEGER NOT NULL,FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE);
   CREATE TABLE daily_history(task_id INTEGER NOT NULL,day TEXT NOT NULL,completed INTEGER NOT NULL,PRIMARY KEY(task_id,day));
   CREATE TABLE day_scores(day TEXT PRIMARY KEY,planned INTEGER NOT NULL,done INTEGER NOT NULL);`);
-  await ensureRewardTables(db);await ensureProgressTables(db);
+  await ensureRewardTables(db);await ensureProgressTables(db);await ensureShopTables(db);
   return db;
 }
 async function seed(db){
@@ -91,4 +92,13 @@ test('backup antigo sem colunas novas usa o DEFAULT do banco',async()=>{
   for(const r of backup.tables.tasks){delete r.kind;delete r.daily;}
   await restoreBackup(a,backup);
   assert.equal(a.raw.prepare("SELECT kind FROM tasks WHERE id=1").get().kind,'task');
+});
+
+test('backup antigo, sem loja, ainda restaura (inventário fica vazio)',async()=>{
+  const a=await app();await seed(a);
+  const backup=await createBackup(a,'1.9.1');
+  delete backup.tables.inventory;delete backup.tables.room_slots;
+  const b=await app();
+  await restoreBackup(b,parseBackup(JSON.stringify(backup)));
+  assert.equal(b.raw.prepare('SELECT COUNT(*) n FROM inventory').get().n,0);
 });
