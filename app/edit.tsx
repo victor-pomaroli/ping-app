@@ -1,7 +1,8 @@
 import React,{useEffect,useState} from 'react';
 import {Text,TextInput,Pressable,ScrollView,StyleSheet,View,Modal} from 'react-native';
 import {useLocalSearchParams,useRouter} from 'expo-router';
-import {getTask,saveTaskGroup,listChildren,ChildInput,eventOffsets} from '../src/store';
+import {getTask,saveTaskGroup,listChildren,ChildInput,eventOffsets,taskRecurrence} from '../src/store';
+import {Recurrence,DAILY,WEEKDAY_LETTER,WEEKDAY_LONG} from '../src/recurrence';
 import * as Notifications from 'expo-notifications';
 import {getPreferences,setPreference} from '../src/preferences';
 import {categories,categoryEmoji,TaskCategory,eventAlertOptions} from '../src/templates';
@@ -19,7 +20,11 @@ export default function Edit(){
   const [priority,setPriority]=useState<'low'|'medium'|'high'>('medium');
   const [category,setCategory]=useState<TaskCategory>('general');
   const [completed,setCompleted]=useState(false);
-  const [daily,setDaily]=useState(false);
+  // Repetir: não repete, todo dia, toda semana (dias escolhidos) ou todo mês (um dia do mês).
+  const [repeat,setRepeat]=useState<'none'|'daily'|'weekly'|'monthly'>('none');
+  const [weekDays,setWeekDays]=useState<number[]>([]);
+  const [monthDay,setMonthDay]=useState(new Date().getDate());
+  const daily=repeat!=='none';
   // "Quando?" é opcional: sem data a tarefa não agenda notificações.
   const [hasDue,setHasDue]=useState(true);
   // Subtarefa não pode ter subtarefas nem virar rotina: só um nível de associação.
@@ -48,7 +53,7 @@ export default function Edit(){
     if(next==='event'&&children.some(child=>child.title.trim())){
       setFeedback({title:'Evento não tem etapas.',message:'Remova as tarefas associadas desta missão antes de transformar em evento.'});return;
     }
-    if(next==='event'){setHasDue(true);setDaily(false);setChildren([]);}
+    if(next==='event'){setHasDue(true);setRepeat('none');setChildren([]);}
     setKind(next);
   }
   function toggleAlert(minutes:number){
@@ -72,7 +77,7 @@ export default function Edit(){
   }
   const [saving,setSaving]=useState(false);
   const [feedback,setFeedback]=useState<{title:string;message:string}|null>(null);
-  useEffect(()=>{if(id)getTask(Number(id)).then(t=>{if(t){setTitle(t.title);listChildren(t.id).then(rows=>setChildren(rows.map(row=>({id:row.id,title:row.title})))).catch(console.warn);setDue(new Date(t.due_at));setPriority(t.priority);setCategory(t.category??'general');setCompleted(!!t.completed);setDaily(!!t.daily);setHasDue(!t.no_due);setIsChild(!!t.parent_id);setKind(t.kind==='event'?'event':'task');setLocation(t.location??'');setEndMinutes(t.ends_at?new Date(t.ends_at).getHours()*60+new Date(t.ends_at).getMinutes():null);setAlerts(eventOffsets(t));}}).catch(console.warn);},[id]);
+  useEffect(()=>{if(id)getTask(Number(id)).then(t=>{if(t){setTitle(t.title);listChildren(t.id).then(rows=>setChildren(rows.map(row=>({id:row.id,title:row.title})))).catch(console.warn);setDue(new Date(t.due_at));setPriority(t.priority);setCategory(t.category??'general');setCompleted(!!t.completed);{const r=taskRecurrence(t);setRepeat(t.daily?r.kind:'none');setWeekDays(r.kind==='weekly'?r.days:[]);setMonthDay(r.kind==='monthly'?r.days[0]:new Date(t.due_at).getDate());}setHasDue(!t.no_due);setIsChild(!!t.parent_id);setKind(t.kind==='event'?'event':'task');setLocation(t.location??'');setEndMinutes(t.ends_at?new Date(t.ends_at).getHours()*60+new Date(t.ends_at).getMinutes():null);setAlerts(eventOffsets(t));}}).catch(console.warn);},[id]);
   async function save(){
     if(!title.trim()){setFeedback({title:'Faltou o principal.',message:isEvent?'Dá um nome para esse evento antes de continuar.':'Dá um nome para essa tarefa antes de continuar.'});return;}
     if(saving)return;
@@ -80,10 +85,12 @@ export default function Edit(){
     let endsAt:number|null=null;
     if(isEvent&&endMinutes!==null){const end=new Date(due);end.setHours(Math.floor(endMinutes/60),endMinutes%60,0,0);endsAt=end.getTime();}
     if(endsAt!==null&&endsAt<=due.getTime()){setFeedback({title:'Término antes do início?',message:'O término precisa ser depois do horário de início.'});return;}
+    if(!isEvent&&!isChild&&repeat==='weekly'&&!weekDays.length){setFeedback({title:'Quais dias da semana?',message:'Escolha pelo menos um dia para a rotina semanal.'});return;}
+    const recurrence:Recurrence=repeat==='weekly'?{kind:'weekly',days:[...weekDays].sort((a,b)=>a-b)}:repeat==='monthly'?{kind:'monthly',days:[monthDay]}:DAILY;
     setSaving(true);
     try{
       const result=await saveTaskGroup({title:title.trim(),description:'',due_at:withDue?due.getTime():Date.now(),priority,category,no_due:withDue?0:1,
-        kind,ends_at:endsAt,location:isEvent?location:'',alert_offsets:isEvent?alerts:[]},isChild||isEvent?[]:children,id?Number(id):undefined,isChild||isEvent?false:daily);
+        kind,ends_at:endsAt,location:isEvent?location:'',alert_offsets:isEvent?alerts:[]},isChild||isEvent?[]:children,id?Number(id):undefined,isChild||isEvent?false:daily,recurrence);
       if(isEvent)await setPreference('eventAlerts',alerts).catch(console.warn);
       const prefs=await getPreferences().catch(()=>null);
       const wantsAlerts=withDue&&(!isEvent||alerts.length>0);
@@ -127,10 +134,22 @@ export default function Edit(){
       </Pressable>
     </View>
     <Text style={s.helper}>A primeira tarefa é a principal. Concluí-la também conclui todas as etapas associadas, e concluir todas as etapas conclui a principal.</Text>
-    <Pressable accessibilityRole="checkbox" accessibilityState={{checked:daily}} onPress={()=>setDaily(value=>!value)} style={{flexDirection:'row',alignItems:'center',gap:13,backgroundColor:c.surface,borderColor:daily?c.accent:c.border,borderWidth:1,borderRadius:10,padding:16,marginTop:22}}>
-      <View style={{width:24,height:24,borderWidth:2,borderRadius:6,borderColor:daily?c.accent:c.muted,backgroundColor:daily?c.accent:'transparent',alignItems:'center',justifyContent:'center'}}><Text style={{color:c.background,fontWeight:'900'}}>{daily?'✓':''}</Text></View>
-      <View style={{flex:1}}><Text style={{color:c.text,fontSize:15,fontWeight:'800'}}>Tarefa diária ↻</Text><Text style={{color:c.muted,fontSize:12,marginTop:3}}>Repetir todos os dias, com ou sem horário</Text></View>
-    </Pressable>
+    <Text style={s.label}>REPETIR ↻ <Text style={s.labelOptional}>(OPCIONAL)</Text></Text>
+    <View style={s.row}>{([['none','Não'],['daily','Todo dia'],['weekly','Semana'],['monthly','Mês']] as const).map(([key,label])=>{const active=repeat===key;
+      return <Pressable key={key} accessibilityRole="radio" accessibilityState={{selected:active}} onPress={()=>{setRepeat(key);if(key==='weekly'&&!weekDays.length)setWeekDays([due.getDay()]);if(key==='monthly')setMonthDay(due.getDate());}} style={[s.choice,active&&s.selected]}><Text style={[s.choiceText,active&&s.selectedText]}>{label}</Text></Pressable>;})}</View>
+    {repeat==='weekly'?<>
+      <View style={[s.row,{marginTop:12,justifyContent:'space-between'}]}>{WEEKDAY_LETTER.map((letter,day)=>{const active=weekDays.includes(day);
+        return <Pressable key={day} accessibilityRole="checkbox" accessibilityLabel={WEEKDAY_LONG[day]} accessibilityState={{checked:active}} onPress={()=>setWeekDays(old=>old.includes(day)?old.filter(x=>x!==day):[...old,day])} style={{width:40,height:40,borderRadius:20,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:active?c.accent:c.border,backgroundColor:active?c.accentSoft:c.surface}}><Text style={{color:active?c.accent:c.text,fontWeight:'900'}}>{letter}</Text></Pressable>;})}</View>
+      <Text style={s.helper}>{weekDays.length?'Aparece e avisa só nos dias marcados.':'Escolha pelo menos um dia.'}</Text>
+    </>:null}
+    {repeat==='monthly'?<>
+      <View style={{flexDirection:'row',alignItems:'center',gap:14,marginTop:12}}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Dia anterior" onPress={()=>setMonthDay(d=>d<=1?31:d-1)} style={[s.choice,{flex:0,width:48,paddingVertical:11}]}><Text style={s.choiceText}>−</Text></Pressable>
+        <Text style={{color:c.text,fontSize:17,fontWeight:'900',flex:1,textAlign:'center'}}>Todo dia {monthDay}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Próximo dia" onPress={()=>setMonthDay(d=>d>=31?1:d+1)} style={[s.choice,{flex:0,width:48,paddingVertical:11}]}><Text style={s.choiceText}>+</Text></Pressable>
+      </View>
+      <Text style={s.helper}>{monthDay>28?'Nos meses mais curtos vale o último dia do mês.':'Aparece e avisa uma vez por mês, nesse dia.'}</Text>
+    </>:null}
     </>}
     {isChild?<Text style={[s.helper,{marginTop:18}]}>Subtarefas não têm horário nem aviso próprio: o lembrete da tarefa principal diz quantas faltam, e concluir todas conclui a principal.</Text>:<>
     <Text style={s.label}>03 / QUANDO? {isEvent?null:<Text style={s.labelOptional}>(OPCIONAL)</Text>}</Text>
@@ -201,7 +220,7 @@ export default function Edit(){
           <Text style={[s.choiceText,active&&{color:c.event,fontWeight:'900'}]}>{active?'🔔 ':''}{option.label}</Text>
         </Pressable>;})}</View>
       {alerts.length?null:<Text style={s.helper}>Sem aviso: o evento só aparece na agenda.</Text>}
-    </>:<Text style={s.helper}>{!hasDue?(daily?'Sem horário, sem notificação. A rotina aparece todo dia na sua lista.':'Sem data, sem notificação. A tarefa fica na sua lista até você concluir.'):daily?'Uma notificação por dia, no horário escolhido. Silêncio entre 22h e 7h.':'Lembretes contextuais no horário e, para tarefas comuns, após 15 min, 1h e 3h. Silêncio entre 22h e 7h. Saúde recebe um aviso único.'}</Text>}
+    </>:<Text style={s.helper}>{!hasDue?(daily?'Sem horário, sem notificação. A rotina aparece na sua lista nos dias em que repete.':'Sem data, sem notificação. A tarefa fica na sua lista até você concluir.'):daily?'Uma notificação em cada dia em que a rotina repete, no horário escolhido. Silêncio entre 22h e 7h.':'Lembretes contextuais no horário e, para tarefas comuns, após 15 min, 1h e 3h. Silêncio entre 22h e 7h. Saúde recebe um aviso único.'}</Text>}
     </>}
     {/* Evento não pede assunto: fica com o que já tinha (novo = Geral). */}
     {isEvent?null:<><Text style={s.label}>04 / QUAL O ASSUNTO?</Text>

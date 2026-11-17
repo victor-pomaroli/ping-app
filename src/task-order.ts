@@ -1,6 +1,6 @@
 import {Task,localDay} from './store';
 /**
- * Ordem única para Hoje e Tarefas: rotinas diárias primeiro (pelo horário), depois as tarefas
+ * Ordem única para Hoje e Tarefas: rotinas (do dia) primeiro (pelo horário), depois as tarefas
  * com data pelo vencimento mais próximo (prioridade não interfere) e, por fim, as sem data,
  * ordenadas por prioridade (alta → baixa). Eventos vêm logo depois das diárias, pelo horário.
  */
@@ -35,7 +35,7 @@ export function sectionTasks(roots:Task[],now=Date.now()):TaskSection[]{
     // Evento fica no dia dele (mesmo já encerrado hoje); nunca vai para atrasadas nem concluídas.
     if(task.kind==='event'){const day=localDay(new Date(task.due_at));push('d'+day,dayLabel(day,today,tomorrow),task);continue;}
     if(task.completed){done.push(task);continue;}
-    if(task.daily)push('daily','ROTINAS DIÁRIAS',task);
+    if(task.daily)push('daily','ROTINAS',task);
     else if(task.no_due)push('nodate','SEM DATA',task);
     else if(task.due_at<now)push('overdue','PASSOU DA HORA',task);
     else{const day=localDay(new Date(task.due_at));push('d'+day,dayLabel(day,today,tomorrow),task);}

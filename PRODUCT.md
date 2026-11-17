@@ -41,7 +41,7 @@ Assuntos: Estudos, Trabalho, Finanças, Casa, Saúde e Geral. Cada um tem cor pr
 ### Lembretes
 
 - **Tarefas comuns:** aviso no horário e novas cobranças após 15 min, 1h e 3h enquanto não forem concluídas. Tarefas de **Saúde** recebem um aviso único.
-- **Rotinas:** um aviso por dia, no horário escolhido.
+- **Rotinas:** repetem todo dia, toda semana (nos dias da semana escolhidos) ou todo mês (num dia do mês; em meses curtos vale o último dia). Um aviso em cada dia em que a rotina ocorre, no horário escolhido.
 - **Eventos:** os avisos escolhidos antes do início.
 - **Silêncio entre 22h e 7h.**
 - Botões direto na notificação: **Concluir** e **Adiar 15 min** (eventos: **Lembrar em 10 min**). Depois do 2º adiamento o Ping fica cansado e o segundo botão vira **Reagendar** (abre a tarefa). Tocar na notificação abre o app na aba Hoje com a tarefa destacada.

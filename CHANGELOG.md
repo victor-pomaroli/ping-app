@@ -21,6 +21,17 @@ A cada versão:
 
 _Nada ainda._
 
+## [1.8.0] — 2026-11-17
+
+### Adicionado
+- **Rotinas semanais e mensais**, além das diárias. Em "Repetir" (tela de criar/editar) escolha *Todo dia*, *Semana* (os dias da semana que quiser, ex.: seg, qua e sex) ou *Mês* (um dia do mês; dia 29, 30 ou 31 vale o último dia nos meses mais curtos).
+- A rotina só aparece em Hoje, Tarefas, no Calendário e no widget nos dias em que repete, e só avisa nesses dias. Em "Minhas rotinas" aparece a próxima data das rotinas semanais e mensais.
+- Notificações semanais usam um aviso repetido por dia marcado; as mensais agendam as próximas datas e o app reabastece ao abrir.
+
+### Corrigido
+- Rotinas não contam mais como "atrasadas" no humor do Ping e nos avisos.
+- O histórico de uma rotina semanal ou mensal só registra os dias em que ela ocorreu.
+
 ## [1.7.2] — 2026-11-17
 
 ### Adicionado

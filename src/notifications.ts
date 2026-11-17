@@ -1,3 +1,4 @@
+import {Recurrence,DAILY,upcomingDays,recurrenceKindLabel} from './recurrence';
 import * as Notifications from 'expo-notifications';
 import {Platform} from 'react-native';
 import {getPreferences} from './preferences';
@@ -35,7 +36,7 @@ export type ScheduledReminder={notification_id:string;stage:number;scheduled_at:
 /** O que o Ping sabe na hora de agendar: adiamentos desta tarefa e quantas atrasadas há hoje. */
 export type ReminderContext={snoozes:number;overdueToday:number};
 const NO_CONTEXT:ReminderContext={snoozes:0,overdueToday:0};
-export type ReminderTask={id:number;title:string;due_at:number;category:TaskCategory;daily?:boolean;subtasks?:{pending:number;total:number}};
+export type ReminderTask={id:number;title:string;due_at:number;category:TaskCategory;daily?:boolean;recur?:Recurrence;subtasks?:{pending:number;total:number}};
 export type EventReminder={id:number;title:string;due_at:number;category:TaskCategory;location:string;offsets:number[]};
 
 /** Cria canal e botões de ação. Não pede permissão: isso acontece após o onboarding. */
@@ -108,14 +109,35 @@ export async function scheduleTaskReminders(task:ReminderTask,ctx:ReminderContex
   const result:ScheduledReminder[]=[];
   try{
     if(task.daily){
+      const recur=task.recur??DAILY;
       const when=new Date(task.due_at);
-      const hour=when.getHours()>=22||when.getHours()<7?7:when.getHours();
-      const minute=hour===7 && (when.getHours()>=22||when.getHours()<7)?0:when.getMinutes();
+      const quiet=when.getHours()>=22||when.getHours()<7;
+      const hour=quiet?7:when.getHours();
+      const minute=quiet?0:when.getMinutes();
       const face=moodFace(prefs.personality,'animado',task.category);
-      const id=await Notifications.scheduleNotificationAsync({
-        content:{title:prefs.privatePreviews?'Ping · lembrete':task.title,body:prefs.privatePreviews?'Você tem uma tarefa esperando. Abra o Ping para conferir.':'Sua rotina diária está te esperando no Ping.',data:{kind:'task_due',taskId:task.id,daily:true,...(face?{largeIcon:face.largeIcon,smallIcon:face.smallIcon}:{})},...(face&&Platform.OS==='android'?{color:face.color}:{})},
-        trigger:{type:Notifications.SchedulableTriggerInputTypes.DAILY,hour,minute,...(Platform.OS==='android'?{channelId:CHANNELS.normal.id}:{})},
-      });
+      const content:Notifications.NotificationContentInput={title:prefs.privatePreviews?'Ping · lembrete':task.title,body:prefs.privatePreviews?'Você tem uma tarefa esperando. Abra o Ping para conferir.':`Sua rotina ${recurrenceKindLabel(recur)} está te esperando no Ping.`,data:{kind:'task_due',taskId:task.id,daily:true,...(face?{largeIcon:face.largeIcon,smallIcon:face.smallIcon}:{})},...(face&&Platform.OS==='android'?{color:face.color}:{})};
+      const channel=Platform.OS==='android'?{channelId:CHANNELS.normal.id}:{};
+      if(recur.kind==='weekly'){
+        // Um aviso repetido por dia da semana (WEEKLY usa 1 = domingo … 7 = sábado).
+        for(const day of recur.days){
+          const id=await Notifications.scheduleNotificationAsync({content,trigger:{type:Notifications.SchedulableTriggerInputTypes.WEEKLY,weekday:day+1,hour,minute,...channel}});
+          result.push({notification_id:id,stage:0,scheduled_at:Date.now()});
+        }
+        return result;
+      }
+      if(recur.kind==='monthly'){
+        // Datas exatas das próximas ocorrências (dia 31 cai no último dia dos meses curtos); o app reabastece ao abrir.
+        const now=Date.now();
+        const days=upcomingDays(recur,new Date(),8,400);
+        for(const day of days){
+          const at=new Date(day.getFullYear(),day.getMonth(),day.getDate(),hour,minute,0,0).getTime();
+          if(at<=now)continue;
+          const id=await Notifications.scheduleNotificationAsync({content,trigger:{type:Notifications.SchedulableTriggerInputTypes.DATE,date:new Date(at),...channel}});
+          result.push({notification_id:id,stage:0,scheduled_at:at});
+        }
+        return result;
+      }
+      const id=await Notifications.scheduleNotificationAsync({content,trigger:{type:Notifications.SchedulableTriggerInputTypes.DAILY,hour,minute,...channel}});
       return [{notification_id:id,stage:0,scheduled_at:Date.now()}];
     }
     const offsets=reminderOffsets(task.category);

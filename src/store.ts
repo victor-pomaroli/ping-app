@@ -4,7 +4,8 @@ import {reminderOffsets} from './templates';
 import {TaskCategory} from './templates';
 import {SNOOZE_STAGE,cancelOrphanNotifications,cancelTaskReminders,scheduleTaskReminders,scheduleSnoozeReminder,scheduleEventAlerts,scheduleEventSnooze,dismissTaskNotifications,dismissAllTaskNotifications,scheduleMoodNotice,ScheduledReminder,ReminderContext} from './notifications';
 import {MANY_OVERDUE} from './ping-mood';
-export type Task={id:number;title:string;description:string;due_at:number;priority:'low'|'medium'|'high';category:TaskCategory;completed:number;completed_at:number|null;archived_at:number|null;notification_id:string|null;parent_id:number|null;daily:number;daily_active:number;daily_day:string|null;no_due:number;kind:TaskKind;ends_at:number|null;location:string;alert_offsets:string};
+import {Recurrence,DAILY,parseRecurrence,serializeDays,occursOn,lastDayOfMonth} from './recurrence';
+export type Task={id:number;title:string;description:string;due_at:number;priority:'low'|'medium'|'high';category:TaskCategory;completed:number;completed_at:number|null;archived_at:number|null;notification_id:string|null;parent_id:number|null;daily:number;daily_active:number;daily_day:string|null;recur:string;recur_days:string;no_due:number;kind:TaskKind;ends_at:number|null;location:string;alert_offsets:string};
 /** `kind`: 'task' (tarefa) ou 'event' (evento com hora marcada, avisado antes de acontecer). */
 export type TaskKind='task'|'event';
 /** `no_due`: 1 = tarefa sem data ("quando?" opcional), não agenda lembretes. */
@@ -37,6 +38,8 @@ const ready=(async()=>{
   if(!cols.some(c=>c.name==='daily'))await db.execAsync('ALTER TABLE tasks ADD COLUMN daily INTEGER NOT NULL DEFAULT 0');
   if(!cols.some(c=>c.name==='daily_active'))await db.execAsync('ALTER TABLE tasks ADD COLUMN daily_active INTEGER NOT NULL DEFAULT 1');
   if(!cols.some(c=>c.name==='daily_day'))await db.execAsync('ALTER TABLE tasks ADD COLUMN daily_day TEXT');
+  if(!cols.some(c=>c.name==='recur'))await db.execAsync("ALTER TABLE tasks ADD COLUMN recur TEXT NOT NULL DEFAULT 'daily'");
+  if(!cols.some(c=>c.name==='recur_days'))await db.execAsync("ALTER TABLE tasks ADD COLUMN recur_days TEXT NOT NULL DEFAULT ''");
   if(!cols.some(c=>c.name==='kind'))await db.execAsync("ALTER TABLE tasks ADD COLUMN kind TEXT NOT NULL DEFAULT 'task'");
   if(!cols.some(c=>c.name==='ends_at'))await db.execAsync('ALTER TABLE tasks ADD COLUMN ends_at INTEGER');
   if(!cols.some(c=>c.name==='location'))await db.execAsync("ALTER TABLE tasks ADD COLUMN location TEXT NOT NULL DEFAULT ''");
@@ -54,18 +57,26 @@ const ready=(async()=>{
 export async function initDB(){await ready;}
 async function refreshWidget(){try{const {Platform}=await import('react-native');if(Platform.OS==='android')await (await import('./widget/sync')).refreshPingWidget();}catch(e){console.warn('[widget] Refresh failed:',e);}}
 /** Concluídas antes de hoje e eventos que terminaram antes de hoje saem da Home/Tarefas (continuam no Calendário). Rotinas resetam todo dia. */
+/** Rotina deste dia? Embute dia da semana/do mês como números (vêm do relógio, não do usuário). */
+function routineOffToday(now=new Date()){
+  const weekday=now.getDay(),dom=now.getDate(),last=lastDayOfMonth(now.getFullYear(),now.getMonth());
+  return `(daily=1 AND (daily_active<>1 OR NOT (recur='daily' OR (recur='weekly' AND instr(','||recur_days||',',',${weekday},')>0) OR (recur='monthly' AND MIN(CAST(recur_days AS INTEGER),${last})=${dom}))))`;
+}
+/** Tarefa comum, ou rotina ativa que ocorre hoje (substitui o antigo "daily=0 OR daily_active=1"). */
+const activeToday=()=>`NOT ${routineOffToday()}`;
+export const taskRecurrence=(t:Pick<Task,'recur'|'recur_days'>):Recurrence=>parseRecurrence(t.recur,t.recur_days);
 const startOfToday=()=>{const d=new Date();d.setHours(0,0,0,0);return d.getTime();};
 const HIDE_DONE_BEFORE_TODAY="NOT ((daily=0 AND completed=1 AND completed_at IS NOT NULL AND completed_at<?1) OR (kind='event' AND COALESCE(ends_at,due_at)<?1))";
-export async function listTasks(){await syncDailyTasks();const db=await ready;const cut=startOfToday();return db.getAllAsync<Task>(`SELECT * FROM tasks WHERE archived_at IS NULL AND (daily=0 OR daily_active=1) AND (parent_id IS NULL OR parent_id NOT IN (SELECT id FROM tasks WHERE daily=1 AND daily_active<>1)) AND (parent_id IS NOT NULL OR ${HIDE_DONE_BEFORE_TODAY}) AND (parent_id IS NULL OR parent_id NOT IN (SELECT id FROM tasks WHERE parent_id IS NULL AND NOT ${HIDE_DONE_BEFORE_TODAY})) ORDER BY completed ASC,no_due ASC,due_at ASC`,cut);}
+export async function listTasks(){await syncDailyTasks();const db=await ready;const cut=startOfToday();return db.getAllAsync<Task>(`SELECT * FROM tasks WHERE archived_at IS NULL AND ${activeToday()} AND (parent_id IS NULL OR parent_id NOT IN (SELECT id FROM tasks WHERE ${routineOffToday()})) AND (parent_id IS NOT NULL OR ${HIDE_DONE_BEFORE_TODAY}) AND (parent_id IS NULL OR parent_id NOT IN (SELECT id FROM tasks WHERE parent_id IS NULL AND NOT ${HIDE_DONE_BEFORE_TODAY})) ORDER BY completed ASC,no_due ASC,due_at ASC`,cut);}
 // Page by root tasks, then fetch all children of those roots in the same result.
 export async function listTaskPage(limit=50,offset=0,category?:TaskCategory,kind?:TaskKind){
   await syncDailyTasks();
   const db=await ready;
   const roots=kind
-    ?await db.getAllAsync<Task>(`SELECT * FROM tasks WHERE parent_id IS NULL AND archived_at IS NULL AND (daily=0 OR daily_active=1) AND ${HIDE_DONE_BEFORE_TODAY} AND kind=?2 ORDER BY completed ASC,daily DESC,no_due ASC,due_at ASC,id ASC LIMIT ?3 OFFSET ?4`,startOfToday(),kind,limit,offset)
+    ?await db.getAllAsync<Task>(`SELECT * FROM tasks WHERE parent_id IS NULL AND archived_at IS NULL AND ${activeToday()} AND ${HIDE_DONE_BEFORE_TODAY} AND kind=?2 ORDER BY completed ASC,daily DESC,no_due ASC,due_at ASC,id ASC LIMIT ?3 OFFSET ?4`,startOfToday(),kind,limit,offset)
     :category
-    ?await db.getAllAsync<Task>(`SELECT * FROM tasks WHERE parent_id IS NULL AND archived_at IS NULL AND (daily=0 OR daily_active=1) AND ${HIDE_DONE_BEFORE_TODAY} AND category=? ORDER BY completed ASC,daily DESC,no_due ASC,CASE WHEN no_due=1 THEN (CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END) ELSE due_at END ASC,id ASC LIMIT ? OFFSET ?`,startOfToday(),category,limit,offset)
-    :await db.getAllAsync<Task>(`SELECT * FROM tasks WHERE parent_id IS NULL AND archived_at IS NULL AND (daily=0 OR daily_active=1) AND ${HIDE_DONE_BEFORE_TODAY} ORDER BY completed ASC,daily DESC,no_due ASC,CASE WHEN no_due=1 THEN (CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END) ELSE due_at END ASC,id ASC LIMIT ? OFFSET ?`,startOfToday(),limit,offset);
+    ?await db.getAllAsync<Task>(`SELECT * FROM tasks WHERE parent_id IS NULL AND archived_at IS NULL AND ${activeToday()} AND ${HIDE_DONE_BEFORE_TODAY} AND category=? ORDER BY completed ASC,daily DESC,no_due ASC,CASE WHEN no_due=1 THEN (CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END) ELSE due_at END ASC,id ASC LIMIT ? OFFSET ?`,startOfToday(),category,limit,offset)
+    :await db.getAllAsync<Task>(`SELECT * FROM tasks WHERE parent_id IS NULL AND archived_at IS NULL AND ${activeToday()} AND ${HIDE_DONE_BEFORE_TODAY} ORDER BY completed ASC,daily DESC,no_due ASC,CASE WHEN no_due=1 THEN (CASE priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END) ELSE due_at END ASC,id ASC LIMIT ? OFFSET ?`,startOfToday(),limit,offset);
   if(!roots.length)return [];
   const ids=roots.map(root=>root.id);
   const children=await db.getAllAsync<Task>(`SELECT * FROM tasks WHERE parent_id IN (${ids.map(()=>'?').join(',')}) AND archived_at IS NULL ORDER BY id ASC`,...ids);
@@ -106,7 +117,9 @@ export async function listCalendarDay(start:number,end:number):Promise<CalendarE
     'SELECT task_id,completed FROM daily_history WHERE day=?',day):[];
   const byId=new Map(history.map(x=>[x.task_id,!!x.completed]));
   const entries:CalendarEntry[]=ordinary.map(task=>({task,occurrenceDay:day,completed:!!task.completed,routine:false,event:task.kind==='event',subtasks:[]}));
+  const dayDate=new Date(start);
   for(const task of routines){
+    if(!occursOn(taskRecurrence(task),dayDate))continue;
     if(day>localDay() || day===localDay() || byId.has(task.id)){
       entries.push({task,occurrenceDay:day,completed:day===localDay()?!!task.completed:byId.get(task.id)??false,routine:true,event:false,subtasks:[]});
     }
@@ -136,7 +149,7 @@ export async function listWidgetTasks(){
   await syncDailyTasks();
   const db=await ready;const startOfDay=new Date();startOfDay.setHours(0,0,0,0);
   // Eventos não têm caixa de concluir, então ficam fora do widget de tarefas.
-  const visible="parent_id IS NULL AND kind<>'event' AND (daily=0 OR daily_active=1) AND archived_at IS NULL";
+  const visible=`parent_id IS NULL AND kind<>'event' AND ${activeToday()} AND archived_at IS NULL`;
   const [pending,done]=await Promise.all([
     db.getAllAsync<Task>(`SELECT * FROM tasks WHERE ${visible} AND completed=0 ORDER BY no_due ASC,due_at ASC,id ASC LIMIT 5`),
     db.getAllAsync<Task>(`SELECT * FROM tasks WHERE ${visible} AND completed=1 AND completed_at>=? ORDER BY completed_at DESC,id DESC LIMIT 5`,startOfDay.getTime()),
@@ -160,7 +173,7 @@ async function replaceReminders(id:number,task:Pick<TaskInput,'title'|'due_at'|'
   if(current?.parent_id || current?.no_due || (current?.daily && !current.daily_active) || (completed && !current?.daily))return;
   const scheduled=current?.kind==='event'
     ?await scheduleEventAlerts({id,title:current.title,due_at:current.due_at,category:current.category,location:current.location,offsets:eventOffsets(current)})
-    :await scheduleTaskReminders({id,title:task.title,due_at:task.due_at,category:task.category,daily:!!current?.daily,subtasks:await subtaskProgress(id)},current?await moodContext(current):undefined);
+    :await scheduleTaskReminders({id,title:task.title,due_at:task.due_at,category:task.category,daily:!!current?.daily,recur:current?taskRecurrence(current):DAILY,subtasks:await subtaskProgress(id)},current?await moodContext(current):undefined);
   try{
     for(const item of scheduled)await db.runAsync(
       'INSERT INTO task_notifications(notification_id,task_id,stage,scheduled_at) VALUES(?,?,?,?)',
@@ -175,8 +188,9 @@ async function subtaskProgress(parentId:number){
   return row&&row.total?{total:row.total,pending:row.pending}:undefined;
 }
 export async function listChildren(parentId:number){const db=await ready;return db.getAllAsync<Task>('SELECT * FROM tasks WHERE parent_id=? ORDER BY id ASC',parentId);}
-export async function saveTaskGroup(task:TaskInput,children:ChildInput[],id?:number,daily=false){
+export async function saveTaskGroup(task:TaskInput,children:ChildInput[],id?:number,daily=false,recurrence:Recurrence=DAILY){
   const db=await ready;
+  const recur=recurrence.kind,recurDays=serializeDays(recurrence);
   // Só um nível: uma subtarefa não recebe subtarefas nem vira rotina.
   const before=id!==undefined?await getTask(id):null;
   if(before?.parent_id){children=[];daily=false;}
@@ -194,10 +208,10 @@ export async function saveTaskGroup(task:TaskInput,children:ChildInput[],id?:num
     const validIds=new Set(existing.map(child=>child.id));
     if(submittedIds.some(childId=>!validIds.has(childId)))throw new Error('Subtarefa não pertence a esta tarefa.');
   }else if(submittedIds.length)throw new Error('Uma tarefa nova não pode reutilizar subtarefas antigas.');
-  if(id!==undefined)await db.runAsync('UPDATE tasks SET daily=?,daily_active=1,daily_day=? WHERE id=?',daily?1:0,daily?localDay():null,id);
+  if(id!==undefined)await db.runAsync('UPDATE tasks SET daily=?,daily_active=1,daily_day=?,recur=?,recur_days=? WHERE id=?',daily?1:0,daily?localDay():null,daily?recur:'daily',daily?recurDays:'',id);
   const parent=await saveTask(task,id);
   if(id===undefined){
-    await db.runAsync('UPDATE tasks SET daily=?,daily_active=1,daily_day=? WHERE id=?',daily?1:0,daily?localDay():null,parent.id);
+    await db.runAsync('UPDATE tasks SET daily=?,daily_active=1,daily_day=?,recur=?,recur_days=? WHERE id=?',daily?1:0,daily?localDay():null,daily?recur:'daily',daily?recurDays:'',parent.id);
     if(daily)await replaceReminders(parent.id,task,false);
   }
   const existing=id?await listChildren(parent.id):[];
@@ -340,7 +354,7 @@ async function bumpSnooze(task:Pick<Task,'id'|'due_at'>){
 /** Quantas tarefas (não eventos) estão atrasadas agora. */
 async function overdueTodayCount(){
   const db=await ready;
-  const row=await db.getFirstAsync<{n:number}>("SELECT COUNT(*) AS n FROM tasks WHERE parent_id IS NULL AND completed=0 AND no_due=0 AND kind='task' AND archived_at IS NULL AND (daily=0 OR daily_active=1) AND due_at<?",Date.now());
+  const row=await db.getFirstAsync<{n:number}>("SELECT COUNT(*) AS n FROM tasks WHERE parent_id IS NULL AND completed=0 AND no_due=0 AND kind='task' AND archived_at IS NULL AND daily=0 AND due_at<?",Date.now());
   return row?.n??0;
 }
 async function moodContext(task:Pick<Task,'id'|'due_at'>):Promise<ReminderContext>{
@@ -370,7 +384,7 @@ export async function syncMoodNotices(){
   const prefs=await getPreferences();
   if(!prefs.notifications||!prefs.moodNotices)return;
   const db=await ready;const now=Date.now();
-  const base="parent_id IS NULL AND completed=0 AND no_due=0 AND kind='task' AND archived_at IS NULL AND (daily=0 OR daily_active=1)";
+  const base=`parent_id IS NULL AND completed=0 AND no_due=0 AND kind='task' AND archived_at IS NULL AND ${activeToday()}`;
   const pending=(await db.getFirstAsync<{n:number}>(`SELECT COUNT(*) AS n FROM tasks WHERE ${base}`))?.n??0;
   if(pending>0){
     const at=new Date(now+MISS_DAYS*86400000);at.setHours(10,0,0,0);
@@ -420,7 +434,9 @@ export async function reconcileReminders(){
     const hasFutureStage=task.daily || (task.kind==='event'
       ?eventOffsets(task).some(minutes=>task.due_at-minutes*60000>now)
       :reminderOffsets(task.category).some(minutes=>task.due_at+minutes*60000>now));
-    if(rows.some(r=>r.scheduled_at>now&&!available.has(r.notification_id)) ||
+    // Rotina mensal agenda só as próximas ocorrências (datas exatas, com último dia nos meses curtos): reabastece quando restam poucas.
+    const monthlyLow=!!task.daily&&task.recur==='monthly'&&rows.filter(r=>r.scheduled_at>now).length<3;
+    if(rows.some(r=>r.scheduled_at>now&&!available.has(r.notification_id)) || monthlyLow ||
        (!rows.length&&hasFutureStage)){
       await replaceReminders(task.id,task,false);
     }
@@ -457,7 +473,11 @@ export async function syncDailyTasks(){
   const today=localDay();
   const roots=await db.getAllAsync<Task>('SELECT * FROM tasks WHERE daily=1 AND daily_active=1 AND parent_id IS NULL AND (daily_day IS NULL OR daily_day<>?)',today);
   for(const task of roots){
-    if(task.daily_day)await db.runAsync('INSERT OR IGNORE INTO daily_history(task_id,day,completed) VALUES(?,?,?)',task.id,task.daily_day,task.completed?1:0);
+    if(task.daily_day){
+      const [y,m,d]=task.daily_day.split('-').map(Number);
+      // Rotina semanal/mensal só tem histórico nos dias em que ocorreu.
+      if(occursOn(taskRecurrence(task),new Date(y,m-1,d)))await db.runAsync('INSERT OR IGNORE INTO daily_history(task_id,day,completed) VALUES(?,?,?)',task.id,task.daily_day,task.completed?1:0);
+    }
     await db.runAsync('UPDATE tasks SET daily_day=?,completed=0,completed_at=NULL WHERE id=?',today,task.id);
     await db.runAsync('UPDATE tasks SET completed=0,completed_at=NULL WHERE parent_id=?',task.id);
   }

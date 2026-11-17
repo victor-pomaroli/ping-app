@@ -2,7 +2,8 @@ import React,{useCallback,useRef,useState} from 'react';
 import {View,Text,ScrollView,Pressable,StyleSheet,AppState,StatusBar,Dimensions,Animated,TextStyle,RefreshControl} from 'react-native';
 import {useFocusEffect,useRouter} from 'expo-router';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {localDay,Task,listTasks,listTaskPage,archiveOldCompletedTasks,completeTask,deleteTask} from '../src/store';
+import {localDay,Task,listTasks,listTaskPage,archiveOldCompletedTasks,completeTask,deleteTask,taskRecurrence} from '../src/store';
+import {recurrenceLabel} from '../src/recurrence';
 import {categories,TaskCategory} from '../src/templates';
 import {useAppTheme,ThemeColors,categoryColors,priorityColors,isDarkAppearance} from '../src/theme';
 import {PingDialog} from '../src/components/PingDialog';
@@ -199,7 +200,7 @@ export default function Home(){
     const done=flipped[t.id]??!!t.completed;
     const late=!done&&!t.daily&&!t.no_due&&t.due_at<now;
     const topic=categoryColors[appearance][t.category]??categoryColors[appearance].general;
-    const when=t.daily?(t.no_due?'↻ diária':'↻ diária · '+hhmm(t.due_at))
+    const when=t.daily?(t.no_due?'↻ '+recurrenceLabel(taskRecurrence(t)):'↻ '+recurrenceLabel(taskRecurrence(t))+' · '+hhmm(t.due_at))
       :t.no_due?(ctx.dayKnown?'':'Sem data')
       :late?`${isToday(t.due_at)?hhmm(t.due_at):shortDay(t.due_at)} · ${ago(t.due_at,now)}`
       :ctx.dayKnown?hhmm(t.due_at):formatDate(t.due_at);
