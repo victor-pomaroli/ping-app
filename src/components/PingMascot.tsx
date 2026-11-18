@@ -15,6 +15,7 @@ import {awayMsOnce} from '../ping-presence';
 import {getStreakInfo,getBrokenStreak,localDay} from '../store';
 import {STREAK_MILESTONES} from '../streak';
 import {getMeta,setMeta} from '../preferences';
+import {useOutfit} from '../outfit';
 
 export {PING_SIZE};
 /** Coluna reservada ao Ping, ao lado do post-it: nada do balão passa daqui para cima do papel. */
@@ -80,6 +81,7 @@ function toneOf(personality:NotificationPersonality,moment:FaceMoment,situation:
 export function PingMascot({personality,left,overdue,done,active,celebrateKey,completeKey,refreshKey=0}:Props){
   const {colors:c}=useAppTheme();
   const motion=useMotionEnabled();
+  const outfit=useOutfit();
   const mood=dayMood(left,overdue,done);
   const moment:FaceMoment=mood==='devendo'?(overdue>=3?'atraso_3h':'atraso_1h'):'no_horario';
   const sleeping=mood==='vazio';
@@ -371,7 +373,7 @@ export function PingMascot({personality,left,overdue,done,active,celebrateKey,co
     </Animated.View>:null}
     <Pressable style={st.pingArea} accessibilityRole="button" accessibilityLabel="Ping. Toque para ouvir o que ele tem a dizer; segure para ouvir o sino" hitSlop={6}
       onPress={()=>{if(!suppressPress.current)poke();}} onPressIn={pressIn} onPressOut={pressOut}>
-      <PingFace ref={face} personality={personality} moment={moment} sleeping={sleeping} running={active&&motion} napping={napping} rain={rain&&motion}/>
+      <PingFace ref={face} personality={personality} moment={moment} sleeping={sleeping} running={active&&motion} napping={napping} rain={rain&&motion} outfit={outfit}/>
     </Pressable>
     {active&&motion&&(sleeping||napping)?<View pointerEvents="none" style={st.pingOverlay}>
       <Zed delay={0} size={11} color={c.muted}/><Zed delay={800} size={14} color={c.muted}/><Zed delay={1600} size={17} color={c.muted}/>

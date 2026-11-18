@@ -108,6 +108,17 @@ const ITEMS:Record<string,Record<NotificationPersonality,ItemLines>>={
     deBoa:{toque:['Ploft! Hehe.','Parece uma nuvem.'],provando:['Que molenga!'],comprou:['Nuvem particular, eba!']},
   },
 };
+/** Acessórios do Ping: falas de quem está se vendo no espelho. */
+const WEAR:Record<NotificationPersonality,ItemLines>={
+  debochado:{toque:['Tô um arraso, admite.','Esse visual? Natural.','Para de me encarar.'],provando:['Hum, ficou bom em mim. Óbvio.','Eu fico bem com tudo.','Experimenta comprar, vai.'],comprou:['Agora sim, um visual à minha altura.','Vou desfilar na aba Hoje.','Elegância custa caro. Você pagou.']},
+  semPaciencia:{toque:['Sim, tô bonito. Próximo assunto.','Não mexe no meu visual.'],provando:['Serve. Compra ou tira.','Decide logo.'],comprou:['Pronto. Agora volta pras tarefas.','Visual aprovado.']},
+  deBoa:{toque:['Gostou do meu look?','Tô me sentindo lindo!'],provando:['Será que combina comigo?','Ai, que fofo!'],comprou:['Amei! Vou usar sempre!','Obrigado, me sinto especial.']},
+};
+const COROA:Record<NotificationPersonality,Partial<ItemLines>>={
+  debochado:{comprou:['Finalmente reconheceram a realeza.'],toque:['Podem me chamar de Majestade.']},
+  semPaciencia:{comprou:['Rei das tarefas. Agora age como tal.']},
+  deBoa:{comprou:['Rei por um dia? Por todos!']},
+};
 function pick(list:string[],last?:number):{text:string;index:number}{
   if(list.length===1)return {text:list[0],index:0};
   let i=Math.floor(Math.random()*list.length);
@@ -116,7 +127,12 @@ function pick(list:string[],last?:number):{text:string;index:number}{
 }
 export function roomLine(p:NotificationPersonality,s:RoomSituation,last?:number){return pick(ROOM[p][s],last);}
 export function itemLine(p:NotificationPersonality,itemId:string,kind:keyof ItemLines,last?:number){
+  if(WEAR_IDS.has(itemId)){
+    const special=itemId==='coroa'?COROA[p][kind]:undefined;
+    return pick(special??WEAR[p][kind],last);
+  }
   const set=ITEMS[itemId]?.[p];
   return set?pick(set[kind],last):roomLine(p,kind==='comprou'?'comprou':kind==='provando'?'provando':'toque',last);
 }
+const WEAR_IDS=new Set(['chapeu_festa','laco','bone','fones','coroa','oculos_nerd','oculos_escuros','oculos_coracao','gravata','cachecol','medalha']);
 export const ITEM_LINE_IDS=Object.keys(ITEMS);

@@ -10,7 +10,7 @@ import type {MorningInfo} from './templates';
 import {ensureRewardTables,grantTaskReward,getBalance,grantTestCoins} from './rewards';
 import {ensureShopTables,purchaseItem,equipItem,unequipSlot,getRoom,type RoomView,type SlotId,type PurchaseResult} from './shop';
 import {createBackup,parseBackup,restoreBackup,type RestoreSummary} from './backup';
-import {ensureProgressTables,loadStats,unlockAchievements,listUnlocked,friendshipLevel,ACHIEVEMENTS,type FriendshipInfo} from './progress';
+import {ensureProgressTables,loadStats,unlockAchievements,listUnlocked,unlockedDates,friendshipLevel,ACHIEVEMENTS,type FriendshipInfo,type ProgressStats} from './progress';
 export type Task={id:number;title:string;description:string;due_at:number;priority:'low'|'medium'|'high';category:TaskCategory;completed:number;completed_at:number|null;archived_at:number|null;notification_id:string|null;parent_id:number|null;daily:number;daily_active:number;daily_day:string|null;recur:string;recur_days:string;no_due:number;kind:TaskKind;ends_at:number|null;location:string;alert_offsets:string};
 /** `kind`: 'task' (tarefa) ou 'event' (evento com hora marcada, avisado antes de acontecer). */
 export type TaskKind='task'|'event';
@@ -305,15 +305,16 @@ async function loadStreakBest(){
   const scores=await loadScores(),today=await todayScore();
   return streakInfo(scores,localDay(),today).best;
 }
-export type ProgressView={balance:number;friendship:FriendshipInfo;achievements:{id:string;title:string;description:string;unlocked:boolean}[]};
+export type ProgressView={balance:number;stats:ProgressStats;friendship:FriendshipInfo;achievements:{id:string;title:string;description:string;icon:string;color:string;unlocked:boolean;unlockedAt:number|null;current:number;target:number}[]};
 /** Saldo, amizade e conquistas para a tela de progresso. */
 export async function getProgress():Promise<ProgressView>{
   const db=await ready;
   const stats=await loadStats(db,await loadStreakBest());
   await unlockAchievements(db,stats); // cobre quem já tinha histórico quando a conquista passou a existir
-  const unlocked=new Set(await listUnlocked(db));
-  return {balance:await getBalance(db),friendship:friendshipLevel(stats.xp),
-    achievements:ACHIEVEMENTS.map(a=>({id:a.id,title:a.title,description:a.description,unlocked:unlocked.has(a.id)}))};
+  const dates=await unlockedDates(db);
+  return {balance:await getBalance(db),stats,friendship:friendshipLevel(stats.xp),
+    achievements:ACHIEVEMENTS.map(a=>{const [current,target]=a.goal(stats);return {id:a.id,title:a.title,description:a.description,icon:a.icon,color:a.color,
+      unlocked:dates[a.id]!=null,unlockedAt:dates[a.id]??null,current:Math.min(current,target),target};})};
 }
 /**
  * Só grava o novo estado no banco (rápido): a tarefa, o histórico da rotina diária e,

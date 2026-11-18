@@ -7,11 +7,14 @@
 import type {RewardDb} from './rewards.ts';
 const getBalance=async(db:RewardDb):Promise<number>=>(await db.getFirstAsync<{b:number}>('SELECT COALESCE(SUM(amount),0) AS b FROM wallet_transactions'))?.b??0;
 
-export type SlotId='wall'|'floor'|'corner'|'table'|'seat';
+export type SlotId='wall'|'floor'|'corner'|'table'|'seat'|'ping_head'|'ping_face'|'ping_neck';
+export const PING_SLOTS:readonly SlotId[]=['ping_head','ping_face','ping_neck'];
+export const isPingSlot=(s:SlotId)=>PING_SLOTS.includes(s);
 export type ShopItem={id:string;name:string;slot:SlotId;price:number;description:string;/** Reservado à Fase 6 (Pro): hoje nenhum item é Pro. */proOnly?:boolean};
 /** Hipótese de catálogo e preços: calibrar com o beta. */
 export const SLOTS:readonly {id:SlotId;name:string}[]=[
   {id:'wall',name:'Parede'},{id:'floor',name:'Chão'},{id:'corner',name:'Canto'},{id:'table',name:'Mesinha'},{id:'seat',name:'Assento'},
+  {id:'ping_head',name:'Cabeça'},{id:'ping_face',name:'Rosto'},{id:'ping_neck',name:'Pescoço'},
 ];
 export const CATALOG:readonly ShopItem[]=[
   {id:'planta',name:'Costela-de-adão',slot:'corner',price:25,description:'Balança com o vento da janela.'},
@@ -25,10 +28,23 @@ export const CATALOG:readonly ShopItem[]=[
   {id:'radio',name:'Rádio retrô',slot:'table',price:70,description:'Toque para tocar uma música.'},
   {id:'pufe',name:'Pufe',slot:'seat',price:45,description:'Afunda que é uma beleza.'},
   {id:'sofa',name:'Sofá',slot:'seat',price:80,description:'O trono oficial do Ping.'},
+  {id:'chapeu_festa',name:'Chapéu de festa',slot:'ping_head',price:40,description:'Todo dia é dia de concluir.'},
+  {id:'laco',name:'Laço',slot:'ping_head',price:45,description:'Fofura em dobro.'},
+  {id:'bone',name:'Boné',slot:'ping_head',price:60,description:'Aba pro lado, estilo garantido.'},
+  {id:'fones',name:'Fones de ouvido',slot:'ping_head',price:85,description:'Modo foco ativado.'},
+  {id:'coroa',name:'Coroa',slot:'ping_head',price:150,description:'Para quem faz acontecer de verdade.'},
+  {id:'oculos_nerd',name:'Óculos redondos',slot:'ping_face',price:40,description:'Ar de quem leu o manual.'},
+  {id:'oculos_escuros',name:'Óculos escuros',slot:'ping_face',price:70,description:'Atrasado, mas com estilo.'},
+  {id:'oculos_coracao',name:'Óculos de coração',slot:'ping_face',price:90,description:'Apaixonado pelas suas tarefas.'},
+  {id:'gravata',name:'Gravata-borboleta',slot:'ping_neck',price:50,description:'Chique para reunião.'},
+  {id:'cachecol',name:'Cachecol',slot:'ping_neck',price:55,description:'Quentinho e listrado.'},
+  {id:'medalha',name:'Medalha',slot:'ping_neck',price:120,description:'Ouro em produtividade.'},
 ];
 export const itemById=(id:string)=>CATALOG.find(i=>i.id===id);
 
 export type PurchaseResult={ok:true;balance:number}|{ok:false;reason:'unknown'|'owned'|'insufficient'|'unavailable'};
+/** O que o Ping está vestindo (para a aba Hoje e o Cantinho). */
+export function outfitOf(equipped:Partial<Record<SlotId,string>>){return {ping_head:equipped.ping_head,ping_face:equipped.ping_face,ping_neck:equipped.ping_neck};}
 export type RoomItem=ShopItem&{owned:boolean;equipped:boolean};
 export type RoomView={balance:number;items:RoomItem[];equipped:Partial<Record<SlotId,string>>};
 

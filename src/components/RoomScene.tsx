@@ -8,7 +8,7 @@ export {ItemThumb} from './RoomArt';
 import type {NotificationPersonality} from '../preferences';
 import {getMeta,setMeta} from '../preferences';
 import type {SlotId} from '../shop';
-import {itemById} from '../shop';
+import {itemById,isPingSlot,outfitOf} from '../shop';
 import type {Appearance} from '../appearance';
 import {roomLine,itemLine,type RoomSituation} from '../room-lines';
 import {spring} from '../motion';
@@ -178,11 +178,15 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
   }
 
   useImperativeHandle(ref,()=>({
-    preview:(id)=>{lastAct.current=Date.now();wake();const it=itemById(id);if(!it)return;const sp=SLOT_SPOT[it.slot];walkTo(sp.x,it.slot==='seat'?0:sp.dy,()=>sayItem(id,'provando'));},
+    preview:(id)=>{
+      lastAct.current=Date.now();wake();const it=itemById(id);if(!it)return;
+      if(isPingSlot(it.slot)){if(motion)face.current?.hop(0.6);sayItem(id,'provando');return;}
+      const sp=SLOT_SPOT[it.slot];walkTo(sp.x,it.slot==='seat'?0:sp.dy,()=>sayItem(id,'provando'));
+    },
     placed:(id,bought)=>{
       lastAct.current=Date.now();wake();const it=itemById(id);if(!it)return;
       setReact({id,n:Date.now()});
-      const sp=SLOT_SPOT[it.slot];
+      const sp=isPingSlot(it.slot)?{x:pos.current.x,dy:pos.current.dy}:SLOT_SPOT[it.slot];
       walkTo(sp.x,sp.dy,()=>{
         if(bought){playSound('party',{volume:0.7});tapSuccess();if(motion){face.current?.hop(1.2);setTimeout(()=>face.current?.dance(2.4),350);}sayItem(id,'comprou');}
         else sayItem(id,'toque');
@@ -196,7 +200,7 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
     if(!active)return;
     lastAct.current=Date.now();nextIdle.current=Date.now()+9000;
     const t=setTimeout(()=>{
-      const hasItems=Object.keys(shownRef.current).length>0;
+      const hasItems=Object.entries(shownRef.current).some(([slot,id])=>id&&!isPingSlot(slot as SlotId));
       if(!hasItems)sayRoom('vazio');
       else if(dayPart()==='night'&&Math.random()<0.5)sayRoom('noite');
       else sayRoom('entrar');
@@ -222,7 +226,9 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
       const r=Math.random();
       if(radioOn&&r<0.3){face.current?.dance(2.5);return;}
       if(items.length&&r<0.55){
-        const id=items[Math.floor(Math.random()*items.length)];const it=itemById(id)!;const sp=SLOT_SPOT[it.slot];
+        const roomItems=items.filter(i=>{const it=itemById(i);return it&&!isPingSlot(it.slot);});
+        if(!roomItems.length){face.current?.peek(1);return;}
+        const id=roomItems[Math.floor(Math.random()*roomItems.length)];const it=itemById(id)!;const sp=SLOT_SPOT[it.slot];
         walkTo(sp.x,sp.dy,()=>{if(Math.random()<0.6)sayItem(id,'toque');else face.current?.peek(1.2);});
       }else if(r<0.8){
         walkTo(90+Math.random()*160,0,()=>{if(Math.random()<0.35)sayRoom('ocioso');});
@@ -270,7 +276,7 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
       <Pressable accessibilityRole="button" accessibilityLabel="Ping. Toque para ele falar; segure para o sino" hitSlop={8}
         onPress={poke} onPressIn={pressIn} onPressOut={pressOut} style={{width:pingBox,height:pingBox}}>
         <View style={{position:'absolute',left:(pingBox-PING_SIZE)/2,top:(pingBox-PING_SIZE)/2,width:PING_SIZE,height:PING_SIZE,transform:[{scale:PING_ROOM_SCALE*s}]}}>
-          <PingFace ref={face} personality={personality} moment="no_horario" sleeping={false} running={active&&motion} napping={napping}/>
+          <PingFace ref={face} personality={personality} moment="no_horario" sleeping={false} running={active&&motion} napping={napping} outfit={outfitOf(shown)}/>
         </View>
       </Pressable>
       {napping&&motion?<View pointerEvents="none" style={StyleSheet.absoluteFill}><Zed delay={0} size={11}/><Zed delay={800} size={14}/><Zed delay={1600} size={17}/></View>:null}

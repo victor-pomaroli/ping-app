@@ -5,6 +5,7 @@ import Svg,{ClipPath,Circle,Defs,Ellipse,G,Line,Path} from 'react-native-svg';
 import {fatigueAt} from '../ping-fatigue';
 import type {NotificationPersonality} from '../preferences';
 import type {FaceMoment} from '../faces';
+import {OutfitLayer,type Outfit} from './PingOutfit';
 
 /**
  * O Ping em vetor, em camadas, para animar por dentro: pisca, olha para os lados, pisca com um olho só,
@@ -70,7 +71,7 @@ export type PingFaceHandle={
   /** Os olhos seguem um ponto (−1…1 em cada eixo, relativo ao Ping). */
   look:(nx:number,ny:number)=>void;
 };
-type Props={personality:NotificationPersonality;moment:FaceMoment;sleeping:boolean;/** Loops ligados (aba na tela e animações ativas). */running:boolean;/** Cochilando por falta de toque. */napping?:boolean;/** Muitas tarefas atrasadas: nuvem de chuva ao lado. */rain?:boolean};
+type Props={personality:NotificationPersonality;moment:FaceMoment;sleeping:boolean;/** Loops ligados (aba na tela e animações ativas). */running:boolean;/** Cochilando por falta de toque. */napping?:boolean;/** Muitas tarefas atrasadas: nuvem de chuva ao lado. */rain?:boolean;/** Acessórios comprados no Cantinho. */outfit?:Outfit};
 
 const AnimatedPath=Animated.createAnimatedComponent(Path);
 
@@ -103,7 +104,7 @@ function lidGeometry(off:number){
   return {body,line};
 }
 
-export const PingFace=forwardRef<PingFaceHandle,Props>(function PingFace({personality,moment,sleeping,running,napping=false,rain=false},ref){
+export const PingFace=forwardRef<PingFaceHandle,Props>(function PingFace({personality,moment,sleeping,running,napping=false,rain=false,outfit},ref){
   const face=sleeping?SLEEP_FACE:FACES[personality][moment];
   const color=COLORS[personality][moment];
   const persIdx=PERS_INDEX[personality];
@@ -426,6 +427,7 @@ export const PingFace=forwardRef<PingFaceHandle,Props>(function PingFace({person
         <Animated.View pointerEvents="none" style={[st.fill,sweat]}>
           <Svg width={PING_SIZE} height={PING_SIZE} viewBox="0 0 200 200"><Path d="M52 64C46 74 44 80 52 86C60 80 58 74 52 64Z" fill="#8fd3ff" stroke={OUT} strokeWidth={3} strokeLinejoin="round"/></Svg>
         </Animated.View>
+        <OutfitLayer outfit={outfit} size={PING_SIZE}/>
         {[star0,star1,star2].map((sty,i)=><Animated.View key={i} pointerEvents="none" style={[{position:'absolute',left:u(92),top:u(26),width:u(16),height:u(16),alignItems:'center',justifyContent:'center'},sty]}>
           <Text style={{fontSize:u(17),color:'#ffd23f',includeFontPadding:false}}>✦</Text>
         </Animated.View>)}

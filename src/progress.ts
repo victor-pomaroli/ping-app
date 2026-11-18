@@ -28,20 +28,23 @@ export function friendshipLevel(xp:number):FriendshipInfo{
 }
 
 export type ProgressStats={tasks:number;routineOccurrences:number;coinsEarned:number;bonusWeeks:number;bestStreak:number;xp:number};
-export type Achievement={id:string;title:string;description:string;done:(s:ProgressStats)=>boolean};
+export type Achievement={id:string;title:string;description:string;icon:string;color:string;
+  /** Quanto falta: [atual, meta]. A conquista vale quando atual ≥ meta. */
+  goal:(s:ProgressStats)=>[number,number];done:(s:ProgressStats)=>boolean};
+const make=(id:string,title:string,description:string,icon:string,color:string,goal:(s:ProgressStats)=>[number,number]):Achievement=>
+  ({id,title,description,icon,color,goal,done:s=>{const [c,m]=goal(s);return c>=m;}});
 export const ACHIEVEMENTS:readonly Achievement[]=[
-  {id:'first_task',title:'Primeira vez',description:'Conclua sua primeira tarefa.',done:s=>s.tasks>=1},
-  {id:'tasks_10',title:'Pegando o jeito',description:'Conclua 10 tarefas.',done:s=>s.tasks>=10},
-  {id:'tasks_50',title:'Máquina de fazer',description:'Conclua 50 tarefas.',done:s=>s.tasks>=50},
-  {id:'tasks_100',title:'Centenário',description:'Conclua 100 tarefas.',done:s=>s.tasks>=100},
-  {id:'first_routine',title:'Rotina é rotina',description:'Conclua uma rotina.',done:s=>s.routineOccurrences>=1},
-  {id:'streak_3',title:'Três seguidos',description:'3 dias de sequência.',done:s=>s.bestStreak>=3},
-  {id:'streak_7',title:'Semana inteira',description:'7 dias de sequência.',done:s=>s.bestStreak>=7},
-  {id:'streak_30',title:'Mês de fogo',description:'30 dias de sequência.',done:s=>s.bestStreak>=30},
-  {id:'week_bonus',title:'Semana consistente',description:'Conclua tarefas em 3 dias da mesma semana.',done:s=>s.bonusWeeks>=1},
-  {id:'friend_3',title:'Amigos de verdade',description:'Chegue ao nível 3 de amizade.',done:s=>friendshipLevel(s.xp).level>=3},
+  make('first_task','Primeira vez','Conclua sua primeira tarefa.','✅','#7BC67B',s=>[s.tasks,1]),
+  make('tasks_10','Pegando o jeito','Conclua 10 tarefas.','🎯','#4FA3FF',s=>[s.tasks,10]),
+  make('tasks_50','Máquina de fazer','Conclua 50 tarefas.','⚙️','#9B7BEA',s=>[s.tasks,50]),
+  make('tasks_100','Centenário','Conclua 100 tarefas.','💯','#FF6B6B',s=>[s.tasks,100]),
+  make('first_routine','Rotina é rotina','Conclua uma rotina.','🔁','#3FA7A0',s=>[s.routineOccurrences,1]),
+  make('streak_3','Três seguidos','3 dias de sequência.','🔥','#FF8A3D',s=>[s.bestStreak,3]),
+  make('streak_7','Semana inteira','7 dias de sequência.','📅','#FFB52E',s=>[s.bestStreak,7]),
+  make('streak_30','Mês de fogo','30 dias de sequência.','🌋','#E8455A',s=>[s.bestStreak,30]),
+  make('week_bonus','Semana consistente','Conclua tarefas em 3 dias da mesma semana.','📈','#6AA8F0',s=>[s.bonusWeeks,1]),
+  make('friend_3','Amigos de verdade','Chegue ao nível 3 de amizade.','💛','#F7C948',s=>[friendshipLevel(s.xp).level,3]),
 ];
-
 export async function ensureProgressTables(db:RewardDb){
   await db.execAsync(`CREATE TABLE IF NOT EXISTS achievements_unlocked(id TEXT PRIMARY KEY,unlocked_at INTEGER NOT NULL);`);
 }
@@ -70,4 +73,9 @@ export async function unlockAchievements(db:RewardDb,stats:ProgressStats,now=Dat
 export async function listUnlocked(db:RewardDb):Promise<string[]>{
   const rows=await db.getAllAsync<{id:string}>('SELECT id FROM achievements_unlocked ORDER BY unlocked_at,id');
   return rows.map(r=>r.id);
+}
+
+export async function unlockedDates(db:RewardDb):Promise<Record<string,number>>{
+  const rows=await db.getAllAsync<{id:string;unlocked_at:number}>('SELECT id,unlocked_at FROM achievements_unlocked');
+  return Object.fromEntries(rows.map(r=>[r.id,r.unlocked_at]));
 }

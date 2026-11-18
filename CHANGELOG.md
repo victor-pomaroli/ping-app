@@ -25,6 +25,9 @@ A cada versão:
 - **Cantinho do Ping**: quartinho opcional (atalho em Progresso) para decorar com moedas: 6 itens cosméticos em 5 espaços, compra com confirmação, usar e remover. Todos os itens são grátis; nenhum dá vantagem.
 - **Atalhos na aba Hoje**: saldo de moedas (com o ícone) e botões para o Cantinho e as Conquistas. O Cantinho ganhou quarto maior, itens com miniatura, "provar" antes de comprar e filtro por espaço. Em Ajustes, "Ferramentas de teste" para ganhar moedas sem concluir tarefas (desligue em `TEST_TOOLS` antes de publicar).
 - **Cantinho vivo**: quarto redesenhado com janela (céu de dia, fim de tarde e noite com estrelas), sol entrando, piso de madeira e cortinas no tom do tema. O Ping mora lá: passeia, olha os móveis, comenta, cochila, senta no sofá e dança no tapete. Toque nos itens para ele reagir; a luminária acende e o rádio toca. 5 itens novos (cacto, pôster do Ping, tapete redondo, rádio retrô e pufe) e uma lojinha com descrição e prévia.
+- **Visual do Ping**: 11 acessórios na lojinha (chapéus, coroa, fones, óculos, gravata, cachecol e medalha). O que o Ping veste aparece na aba Hoje, no Cantinho e nas Conquistas, e fica salvo (inclusive no backup).
+- **Conquistas repaginadas**: o Ping dentro do anel de amizade, números do seu progresso, próxima conquista em destaque e medalhas com barra de progresso e data.
+- Cantinho com rolagem única, filtros fixos ao rolar e espaçamentos padronizados.
 - Estrutura interna do Ping Pro com o paywall desligado: nada muda para quem usa o app hoje.
 
 ### Alterado
