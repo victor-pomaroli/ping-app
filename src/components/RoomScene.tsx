@@ -1,9 +1,9 @@
 import React,{forwardRef,useCallback,useEffect,useImperativeHandle,useRef,useState} from 'react';
 import {View,Text,Pressable,StyleSheet} from 'react-native';
 import Animated,{Easing,cancelAnimation,interpolate,useAnimatedStyle,useSharedValue,withDelay,withRepeat,withSequence,withSpring,withTiming} from 'react-native-reanimated';
-import Svg,{Defs,RadialGradient,Stop,Rect,Circle} from 'react-native-svg';
+import Svg,{Defs,RadialGradient,Stop,Rect,Circle,Path} from 'react-native-svg';
 import {PingFace,PING_SIZE,type PingFaceHandle} from './PingFace';
-import {ITEM_ART,ROOM_W,ROOM_H,FEET_Y,WINDOW,SLOT_SPOT,ROOM_PALETTE,RoomBackground,WindowFrame,Cloud,dayPart,type DayPart} from './RoomArt';
+import {ITEM_ART,ROOM_W,ROOM_H,FEET_Y,OFF,WINDOW,SLOT_SPOT,ROOM_PALETTE,RoomBackground,WindowFrame,Cloud,dayPart,type DayPart} from './RoomArt';
 export {ItemThumb} from './RoomArt';
 import type {NotificationPersonality} from '../preferences';
 import {getMeta,setMeta} from '../preferences';
@@ -15,7 +15,11 @@ import {spring} from '../motion';
 import {playSound,playTap,stopSound} from '../ping-sounds';
 import {tapLight,tapSuccess} from '../haptics';
 
-const ORDER:SlotId[]=['wall','corner','table','floor','seat'];
+const ORDER:SlotId[]=['ceiling','high','media','wall','corner','table','floor','seat','front'];
+/** Itens que ligam e desligam com um toque (estado salvo). */
+type Toggles=Record<'luminaria'|'radio'|'ventilador'|'televisao'|'neon',boolean>;
+const TOGGLE_DEFAULT:Toggles={luminaria:true,radio:false,ventilador:true,televisao:false,neon:true};
+const isToggle=(id:string):id is keyof Toggles=>id in TOGGLE_DEFAULT;
 /** O Ping no quarto fica menor que na aba Hoje, para caber com os móveis. */
 const PING_ROOM_SCALE=0.7;
 const NAP_MS=40000;
@@ -33,6 +37,8 @@ const baseTone=(p:NotificationPersonality):Tone=>p==='debochado'?'debochado':p==
 export type RoomHandle={
   /** O usuário está provando um item: o Ping vai até lá e comenta. */
   preview:(itemId:string)=>void;
+  /** Volta para o meio do quarto (ao abrir a loja, o quarto encolhe). */
+  home:()=>void;
   /** Comprou ou colocou um item no quarto: festa curta. */
   placed:(itemId:string,bought:boolean)=>void;
   noCoins:()=>void;
@@ -46,14 +52,19 @@ type Props={
   /** Tela visível e animações ligadas: só assim há loops e passeios. */
   active:boolean;
   motion:boolean;
+  /** Primeira linha visível (px) quando o quarto está recortado: o balão não sobe além dela. */
+  viewTop?:number;
 };
 
-export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,equipped,preview,appearance,personality,active,motion},ref){
+export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,equipped,preview,appearance,personality,active,motion,viewTop=0},ref){
   const s=width/ROOM_W,height=ROOM_H*s;
   const look=ROOM_PALETTE[appearance]??ROOM_PALETTE.dark;
   const [part,setPart]=useState<DayPart>(dayPart());
-  const [lampOn,setLampOn]=useState(true);
-  const [radioOn,setRadioOn]=useState(false);
+  const [toggles,setToggles]=useState<Toggles>(TOGGLE_DEFAULT);
+  const [togglesReady,setTogglesReady]=useState(false);
+  const [now,setNow]=useState(new Date());
+  const [tvFrame,setTvFrame]=useState(0);
+  const lampOn=toggles.luminaria,radioOn=toggles.radio;
   const [napping,setNapping]=useState(false);
   const [line,setLine]=useState<{text:string;tone:Tone}|null>(null);
   const [react,setReact]=useState<{id:string;n:number}|null>(null);
@@ -75,9 +86,13 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
   const hold=useRef({timer:null as ReturnType<typeof setTimeout>|null,on:false,start:0,suppress:false});
   const napRef=useRef(false);
   const shownRef=useRef(shown);shownRef.current=shown;
+  const togglesRef=useRef(toggles);togglesRef.current=toggles;
 
-  useEffect(()=>{getMeta('room:lamp').then(v=>setLampOn(v!=='0')).catch(()=>{});getMeta('room:radio').then(v=>setRadioOn(v==='1')).catch(()=>{});},[]);
-  useEffect(()=>{if(active)setPart(dayPart());},[active]);
+  useEffect(()=>{getMeta('room:toggles').then(v=>{if(v)setToggles({...TOGGLE_DEFAULT,...JSON.parse(v)});}).catch(()=>{}).finally(()=>setTogglesReady(true));},[]);
+  useEffect(()=>{if(active){setPart(dayPart());setNow(new Date());}},[active]);
+  // Relógio de parede de verdade e a TV trocando de cena.
+  useEffect(()=>{if(!active)return;const t=setInterval(()=>setNow(new Date()),30000);return()=>clearInterval(t);},[active]);
+  useEffect(()=>{if(!active||!motion||!toggles.televisao||shown.media!=='televisao')return;const t=setInterval(()=>setTvFrame(f=>f+1),1600);return()=>clearInterval(t);},[active,motion,toggles.televisao,shown.media]);
 
   const speak=useCallback((text:string,tone:Tone)=>{
     if(hideTimer.current)clearTimeout(hideTimer.current);
@@ -129,8 +144,21 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
     return true;
   },[motion,sayRoom]);
 
-  function toggleLamp(){const v=!lampOn;setLampOn(v);setMeta('room:lamp',v?'1':'0').catch(()=>{});tapLight();}
-  function toggleRadio(){const v=!radioOn;setRadioOn(v);setMeta('room:radio',v?'1':'0').catch(()=>{});tapLight();if(v&&motion)setTimeout(()=>face.current?.dance(3),400);}
+  function flip(id:keyof Toggles){
+    const next={...togglesRef.current,[id]:!togglesRef.current[id]};
+    togglesRef.current=next;setToggles(next);setMeta('room:toggles',JSON.stringify(next)).catch(()=>{});tapLight();
+    if(id==='radio'&&next.radio&&motion)setTimeout(()=>face.current?.dance(3),400);
+  }
+  /** Lugar onde o Ping para perto de um item; diante da TV ele senta se houver onde. */
+  function spotFor(slot:SlotId){
+    if(slot==='media'&&shownRef.current.seat)return SLOT_SPOT.seat;
+    return SLOT_SPOT[slot]??{x:pos.current.x,dy:pos.current.dy};
+  }
+  /** Há alguma luz acesa no quarto? (para o escuro da noite e para o Ping não pedir luz à toa) */
+  function litNow(){
+    const sh=shownRef.current,t=togglesRef.current;
+    return (sh.table==='luminaria'&&t.luminaria)||sh.ceiling==='pendente'||sh.ceiling==='luzinhas'||(sh.high==='neon'&&t.neon)||(sh.media==='televisao'&&t.televisao);
+  }
 
   /** Toque num item: o item reage, o Ping vai até ele e comenta. */
   function touchItem(id:string){
@@ -139,15 +167,16 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
     const item=itemById(id);
     if(!item)return;
     setReact({id,n:Date.now()});
-    if(id==='luminaria')toggleLamp();
-    if(id==='radio')toggleRadio();
-    const spot=SLOT_SPOT[item.slot];
+    if(isToggle(id))flip(id);
+    const spot=spotFor(item.slot);
     walkTo(spot.x,spot.dy,()=>{
       sayItem(id,'toque');
       if(!motion)return;
       if(item.slot==='floor')face.current?.dance(2);
       else if(item.slot==='corner')face.current?.peek(1.4);
       else if(item.slot==='wall')face.current?.look(-0.7,-0.9);
+      else if(item.slot==='ceiling'||item.slot==='high')face.current?.look(0,-1);
+      else if(item.slot==='front')face.current?.look(-0.9,0.3);
       else if(item.slot==='seat')setTimeout(()=>face.current?.yawn(),900);
     });
   }
@@ -181,12 +210,13 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
     preview:(id)=>{
       lastAct.current=Date.now();wake();const it=itemById(id);if(!it)return;
       if(isPingSlot(it.slot)){if(motion)face.current?.hop(0.6);sayItem(id,'provando');return;}
-      const sp=SLOT_SPOT[it.slot];walkTo(sp.x,it.slot==='seat'?0:sp.dy,()=>sayItem(id,'provando'));
+      const sp=spotFor(it.slot);walkTo(sp.x,it.slot==='seat'||it.slot==='media'?0:sp.dy,()=>{sayItem(id,'provando');if(it.slot==='ceiling'||it.slot==='high')face.current?.look(0,-1);});
     },
+    home:()=>walkTo(SLOT_SPOT.floor.x,0),
     placed:(id,bought)=>{
       lastAct.current=Date.now();wake();const it=itemById(id);if(!it)return;
       setReact({id,n:Date.now()});
-      const sp=isPingSlot(it.slot)?{x:pos.current.x,dy:pos.current.dy}:SLOT_SPOT[it.slot];
+      const sp=isPingSlot(it.slot)?{x:pos.current.x,dy:pos.current.dy}:spotFor(it.slot);
       walkTo(sp.x,sp.dy,()=>{
         if(bought){playSound('party',{volume:0.7});tapSuccess();if(motion){face.current?.hop(1.2);setTimeout(()=>face.current?.dance(2.4),350);}sayItem(id,'comprou');}
         else sayItem(id,'toque');
@@ -197,17 +227,18 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
 
   // Ao entrar: cumprimento (ou comentário do quarto vazio / do escuro).
   useEffect(()=>{
-    if(!active)return;
+    if(!active||!togglesReady)return;
     lastAct.current=Date.now();nextIdle.current=Date.now()+9000;
     const t=setTimeout(()=>{
-      const hasItems=Object.entries(shownRef.current).some(([slot,id])=>id&&!isPingSlot(slot as SlotId));
+      const sh=shownRef.current;
+      const hasItems=Object.entries(sh).some(([slot,id])=>id&&!isPingSlot(slot as SlotId));
       if(!hasItems)sayRoom('vazio');
-      else if(dayPart()==='night'&&Math.random()<0.5)sayRoom('noite');
+      else if(dayPart()==='night'&&!litNow()&&Math.random()<0.6)sayRoom(sh.table==='luminaria'?'noite':'noiteSemLuz');
       else sayRoom('entrar');
       if(motion)face.current?.hop(0.7);
     },650);
     return()=>clearTimeout(t);
-  },[active]);
+  },[active,togglesReady]);
 
   // Vida própria: passeia, olha os móveis, comenta um item, boceja e cochila se ninguém mexer.
   useEffect(()=>{
@@ -224,11 +255,12 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
       nextIdle.current=now+8000+Math.random()*7000;
       const items=Object.values(shownRef.current).filter(Boolean) as string[];
       const r=Math.random();
-      if(radioOn&&r<0.3){face.current?.dance(2.5);return;}
+      if(radioOn&&shownRef.current.table==='radio'&&r<0.3){face.current?.dance(2.5);return;}
+      if(togglesRef.current.televisao&&shownRef.current.media==='televisao'&&r<0.4){const sp=spotFor('media');walkTo(sp.x,sp.dy,()=>{if(Math.random()<0.5)sayItem('televisao','toque');});return;}
       if(items.length&&r<0.55){
         const roomItems=items.filter(i=>{const it=itemById(i);return it&&!isPingSlot(it.slot);});
         if(!roomItems.length){face.current?.peek(1);return;}
-        const id=roomItems[Math.floor(Math.random()*roomItems.length)];const it=itemById(id)!;const sp=SLOT_SPOT[it.slot];
+        const id=roomItems[Math.floor(Math.random()*roomItems.length)];const it=itemById(id)!;const sp=spotFor(it.slot);
         walkTo(sp.x,sp.dy,()=>{if(Math.random()<0.6)sayItem(id,'toque');else face.current?.peek(1.2);});
       }else if(r<0.8){
         walkTo(90+Math.random()*160,0,()=>{if(Math.random()<0.35)sayRoom('ocioso');});
@@ -241,19 +273,18 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
 
   const pingBox=PING_SIZE*PING_ROOM_SCALE*s;
   const pingStyle=useAnimatedStyle(()=>({transform:[{translateX:px.value*s-pingBox/2},{translateY:(FEET_Y+py.value)*s-pingBox+bob.value*s}]}));
-  const shadowStyle=useAnimatedStyle(()=>({opacity:py.value<0?0:0.22,transform:[{translateX:px.value*s-pingBox*0.32},{translateY:FEET_Y*s-pingBox*0.06},{scaleX:1+bob.value*0.03}]}));
+  const shadowStyle=useAnimatedStyle(()=>({opacity:py.value<0?0:0.22,transform:[{translateX:px.value*s-pingBox*0.32},{translateY:(FEET_Y+Math.max(0,py.value))*s-pingBox*0.06},{scaleX:1+bob.value*0.03}]}));
   const bubbleStyle=useAnimatedStyle(()=>{
     const cx=px.value*s,top=(FEET_Y+py.value)*s-pingBox*0.95+bob.value*s;
     const left=Math.max(4,Math.min(cx-bubbleW.value/2,width-bubbleW.value-4));
-    return {opacity:bubbleW.value>0?Math.min(1,bubble.value*1.6):0,transform:[{translateX:left},{translateY:Math.max(2,top-bubbleH.value-8)+(1-bubble.value)*6},{scale:0.75+0.25*bubble.value}]};
+    return {opacity:bubbleW.value>0?Math.min(1,bubble.value*1.6):0,transform:[{translateX:left},{translateY:Math.max(viewTop+6,top-bubbleH.value-8)+(1-bubble.value)*6},{scale:0.75+0.25*bubble.value}]};
   });
   const tailStyle=useAnimatedStyle(()=>{
     const cx=px.value*s;const left=Math.max(4,Math.min(cx-bubbleW.value/2,width-bubbleW.value-4));
     return {left:Math.max(12,Math.min(cx-left-7,bubbleW.value-26))};
   });
-  const dark=part==='night'&&!lampOn;
+  const lit=litNow();
   const tone=line?TONES[line.tone]:TONES.neutro;
-  const lampArt=shown.table==='luminaria';
 
   return <View style={{width,height,borderRadius:16,overflow:'hidden'}}>
     <Svg width={width} height={height} viewBox={`0 0 ${ROOM_W} ${ROOM_H}`} style={StyleSheet.absoluteFill}>
@@ -270,7 +301,7 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
     {part==='day'&&active&&motion?[0,1,2,3,4].map(i=><Mote key={i} s={s} i={i}/>):null}
     {ORDER.map(slot=>{const id=shown[slot];if(!id||!ITEM_ART[id])return null;
       return <ItemLayer key={slot} id={id} slot={slot} s={s} motion={motion&&active} react={react?.id===id?react.n:0}
-        ghost={preview?.id===id} on={id==='luminaria'?lampOn:id==='radio'?radioOn:undefined} onPress={()=>touchItem(id)}/>;})}
+        ghost={preview?.id===id} on={isToggle(id)?toggles[id]:undefined} now={now} frame={tvFrame} onPress={()=>touchItem(id)}/>;})}
     <Animated.View pointerEvents="none" style={[{position:'absolute',left:0,top:0,width:pingBox*0.64,height:pingBox*0.12,borderRadius:pingBox,backgroundColor:'#000'},shadowStyle]}/>
     <Animated.View style={[{position:'absolute',left:0,top:0,width:pingBox,height:pingBox},pingStyle]}>
       <Pressable accessibilityRole="button" accessibilityLabel="Ping. Toque para ele falar; segure para o sino" hitSlop={8}
@@ -282,14 +313,18 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
       {napping&&motion?<View pointerEvents="none" style={StyleSheet.absoluteFill}><Zed delay={0} size={11}/><Zed delay={800} size={14}/><Zed delay={1600} size={17}/></View>:null}
     </Animated.View>
     {radioOn&&shown.table==='radio'&&active&&motion?[0,1,2].map(i=><Note key={i} s={s} i={i}/>):null}
-    {part==='night'?<Svg pointerEvents="none" width={width} height={height} viewBox={`0 0 ${ROOM_W} ${ROOM_H}`} style={StyleSheet.absoluteFill}>
-      <Defs><RadialGradient id="lampGlow" cx="89" cy="120" r="120" gradientUnits="userSpaceOnUse">
-        <Stop offset="0" stopColor="#FFD36B" stopOpacity={lampOn&&lampArt?0.38:0}/><Stop offset="1" stopColor="#FFD36B" stopOpacity={0}/></RadialGradient></Defs>
-      <Rect x={0} y={0} width={ROOM_W} height={ROOM_H} fill="#0B1030" opacity={dark||!lampArt?0.34:0.14}/>
-      {lampArt?<Circle cx={89} cy={120} r={120} fill="url(#lampGlow)"/>:null}
-    </Svg>:lampOn&&lampArt?<Svg pointerEvents="none" width={width} height={height} viewBox={`0 0 ${ROOM_W} ${ROOM_H}`} style={StyleSheet.absoluteFill}>
-      <Defs><RadialGradient id="lampDay" cx="89" cy="122" r="60" gradientUnits="userSpaceOnUse"><Stop offset="0" stopColor="#FFE08A" stopOpacity={0.35}/><Stop offset="1" stopColor="#FFE08A" stopOpacity={0}/></RadialGradient></Defs>
-      <Circle cx={89} cy={122} r={60} fill="url(#lampDay)"/>
+    {part==='night'||lit?<Svg pointerEvents="none" width={width} height={height} viewBox={`0 0 ${ROOM_W} ${ROOM_H}`} style={StyleSheet.absoluteFill}>
+      <Defs>
+        <RadialGradient id="gLamp" cx="89" cy={120+OFF} r="130" gradientUnits="userSpaceOnUse"><Stop offset="0" stopColor="#FFD36B" stopOpacity={part==='night'?0.42:0.25}/><Stop offset="1" stopColor="#FFD36B" stopOpacity={0}/></RadialGradient>
+        <RadialGradient id="gPend" cx="170" cy="124" r="150" gradientUnits="userSpaceOnUse"><Stop offset="0" stopColor="#FFE8A3" stopOpacity={part==='night'?0.4:0.18}/><Stop offset="1" stopColor="#FFE8A3" stopOpacity={0}/></RadialGradient>
+        <RadialGradient id="gTv" cx="275" cy="265" r="110" gradientUnits="userSpaceOnUse"><Stop offset="0" stopColor="#7FB8FF" stopOpacity={part==='night'?0.35:0.12}/><Stop offset="1" stopColor="#7FB8FF" stopOpacity={0}/></RadialGradient>
+        <RadialGradient id="gNeon" cx="170" cy="190" r="110" gradientUnits="userSpaceOnUse"><Stop offset="0" stopColor="#FF6FD8" stopOpacity={part==='night'?0.3:0.1}/><Stop offset="1" stopColor="#FF6FD8" stopOpacity={0}/></RadialGradient>
+      </Defs>
+      {part==='night'?<Rect x={0} y={0} width={ROOM_W} height={ROOM_H} fill="#0B1030" opacity={lit?0.2:0.4}/>:null}
+      {shown.table==='luminaria'&&lampOn?<Circle cx={89} cy={120+OFF} r={130} fill="url(#gLamp)"/>:null}
+      {shown.ceiling==='pendente'?<Circle cx={170} cy={124} r={150} fill="url(#gPend)"/>:null}
+      {shown.media==='televisao'&&toggles.televisao?<Circle cx={275} cy={265} r={110} fill="url(#gTv)"/>:null}
+      {shown.high==='neon'&&toggles.neon?<Circle cx={170} cy={190} r={110} fill="url(#gNeon)"/>:null}
     </Svg>:null}
     {line?<Animated.View pointerEvents="none" style={[st.bubbleWrap,bubbleStyle]}>
       <View style={st.bubble} onLayout={e=>{bubbleW.value=e.nativeEvent.layout.width;bubbleH.value=e.nativeEvent.layout.height;}}>
@@ -301,36 +336,65 @@ export const RoomScene=forwardRef<RoomHandle,Props>(function RoomScene({width,eq
   </View>;
 });
 
+/** Pás do ventilador: giram num plano achatado, como vistas de lado. */
+function FanBlades({s,left,top,on}:{s:number;left:number;top:number;on:boolean}){
+  const r=useSharedValue(0);
+  useEffect(()=>{
+    if(on){r.value=r.value%360;r.value=withRepeat(withTiming(r.value+360,{duration:650,easing:Easing.linear}),-1,false);}
+    else{cancelAnimation(r);r.value=withTiming(r.value+90,{duration:900,easing:Easing.out(Easing.quad)});}
+    return()=>cancelAnimation(r);
+  },[on]);
+  const spin=useAnimatedStyle(()=>({transform:[{rotate:`${r.value}deg`}]}));
+  const size=120*s;
+  return <View pointerEvents="none" style={{position:'absolute',left:left-size/2,top:top-size/2,width:size,height:size,transform:[{scaleY:0.2}]}}>
+    <Animated.View style={[{width:size,height:size},spin]}>
+      <Svg width={size} height={size} viewBox="-60 -60 120 120">
+        {[0,90,180,270].map(a=><Path key={a} d="M6 -5 L56 -10 Q60 0 56 10 L6 5 Z" fill="#A0703F" stroke="#7A532C" strokeWidth={2} transform={`rotate(${a})`}/>)}
+        <Circle cx={0} cy={0} r={9} fill="#C9C1B0"/>
+      </Svg>
+    </Animated.View>
+  </View>;
+}
 /** Item tocável e animado: balança (plantas), entorta (quadros), afunda (assentos), pula (tapetes), acende (luminária, rádio). */
-function ItemLayer({id,slot,s,motion,react,ghost,on,onPress}:{id:string;slot:SlotId;s:number;motion:boolean;react:number;ghost:boolean;on?:boolean;onPress:()=>void}){
+function ItemLayer({id,slot,s,motion,react,ghost,on,now,frame,onPress}:{id:string;slot:SlotId;s:number;motion:boolean;react:number;ghost:boolean;on?:boolean;now:Date;frame:number;onPress:()=>void}){
   const art=ITEM_ART[id];
-  const [x,y,w,h]=art.box;
+  const [x,y0,w,h]=art.box;const y=y0+(art.dy??0);
   const rot=useSharedValue(0),sy=useSharedValue(1),sx=useSharedValue(1),sway=useSharedValue(0);
   useEffect(()=>{
-    if(!motion||slot!=='corner'){cancelAnimation(sway);sway.value=0;return;}
-    sway.value=withRepeat(withSequence(withTiming(1.6,{duration:1900,easing:Easing.inOut(Easing.sin)}),withTiming(-1.6,{duration:1900,easing:Easing.inOut(Easing.sin)})),-1,true);
+    if(!motion||(slot!=='corner'&&id!=='pendente')){cancelAnimation(sway);sway.value=0;return;}
+    const amp=id==='pendente'?2.4:1.6;
+    sway.value=withRepeat(withSequence(withTiming(amp,{duration:1900,easing:Easing.inOut(Easing.sin)}),withTiming(-amp,{duration:1900,easing:Easing.inOut(Easing.sin)})),-1,true);
     return()=>cancelAnimation(sway);
   },[motion,slot]);
   useEffect(()=>{
     if(!react||!motion)return;
     if(slot==='corner')rot.value=withSequence(withTiming(-8,{duration:90}),withTiming(7,{duration:120}),withTiming(-4,{duration:120}),withSpring(0,spring.soft));
-    else if(slot==='wall')rot.value=withSequence(withTiming(6,{duration:110}),withSpring(0,{damping:4,stiffness:120}));
+    else if(slot==='wall'||slot==='high'||slot==='media'||slot==='ceiling')rot.value=withSequence(withTiming(slot==='media'?3:6,{duration:110}),withSpring(0,{damping:4,stiffness:120}));
     else if(slot==='seat'){sy.value=withSequence(withTiming(0.88,{duration:120}),withSpring(1,spring.pop));sx.value=withSequence(withTiming(1.06,{duration:120}),withSpring(1,spring.pop));}
     else{sy.value=withSequence(withTiming(1.08,{duration:110}),withSpring(1,spring.pop));sx.value=withSequence(withTiming(1.04,{duration:110}),withSpring(1,spring.pop));}
   },[react]);
   const radioBeat=useSharedValue(1);
   useEffect(()=>{
     if(id==='radio'&&on&&motion){radioBeat.value=withRepeat(withSequence(withTiming(1.04,{duration:240}),withTiming(1,{duration:240})),-1,false);}
+    else if(id==='gatinho'&&motion){radioBeat.value=withRepeat(withSequence(withTiming(1.025,{duration:1400,easing:Easing.inOut(Easing.sin)}),withTiming(1,{duration:1400,easing:Easing.inOut(Easing.sin)})),-1,false);}
     else{cancelAnimation(radioBeat);radioBeat.value=1;}
     return()=>cancelAnimation(radioBeat);
   },[id,on,motion]);
+  const blink=useSharedValue(0);
+  useEffect(()=>{if(!art.glow||!motion){cancelAnimation(blink);blink.value=0.5;return;}blink.value=withRepeat(withTiming(1,{duration:700}),-1,true);return()=>cancelAnimation(blink);},[motion]);
+  const glowA=useAnimatedStyle(()=>({opacity:blink.value}));
+  const glowB=useAnimatedStyle(()=>({opacity:1-blink.value}));
   const style=useAnimatedStyle(()=>({opacity:ghost?0.72:1,transform:[{rotate:`${rot.value+sway.value}deg`},{scaleX:sx.value*radioBeat.value},{scaleY:sy.value*radioBeat.value}]}));
   const name=itemById(id)?.name??'Item';
+  const ceilingLike=slot==='wall'||slot==='ceiling'||slot==='high'||slot==='media';
   return <Pressable accessibilityRole="button" accessibilityLabel={`${name}. Toque para o Ping comentar${on!==undefined?`; ${on?'ligado':'desligado'}`:''}`}
     onPress={onPress} style={{position:'absolute',left:x*s,top:y*s,width:w*s,height:h*s}}>
-    <Animated.View style={[{width:w*s,height:h*s,transformOrigin:slot==='wall'?'50% 0%':'50% 100%'},style]}>
-      <Svg width={w*s} height={h*s} viewBox={art.box.join(' ')}>{art.draw()}</Svg>
-      {id==='luminaria'&&!on?<View pointerEvents="none" style={{position:'absolute',left:(72-x)*s,top:(102-y)*s,width:34*s,height:24*s,backgroundColor:'#00000040',borderRadius:4*s}}/>:null}
+    <Animated.View style={[{width:w*s,height:h*s,transformOrigin:ceilingLike?'50% 0%':'50% 100%'},style]}>
+      <Svg width={w*s} height={h*s} viewBox={art.box.join(' ')}>{art.draw({on,now,frame})}</Svg>
+      {art.glow?<><Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill,glowA]}><Svg width={w*s} height={h*s} viewBox={art.box.join(' ')}>{art.glow(0)}</Svg></Animated.View>
+        <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill,glowB]}><Svg width={w*s} height={h*s} viewBox={art.box.join(' ')}>{art.glow(1)}</Svg></Animated.View></>:null}
+      {id==='ventilador'?<FanBlades s={s} left={(170-x)*s} top={(60-y0)*s} on={!!on&&motion}/>:null}
+      {id==='luminaria'&&!on?<View pointerEvents="none" style={{position:'absolute',left:(72-x)*s,top:(102-y0)*s,width:34*s,height:24*s,backgroundColor:'#00000040',borderRadius:4*s}}/>:null}
     </Animated.View>
   </Pressable>;
 }
@@ -354,7 +418,7 @@ function Star({x,y,delay,on}:{x:number;y:number;delay:number;on:boolean}){
 function Mote({s,i}:{s:number;i:number}){
   const p=useSharedValue(0);
   useEffect(()=>{p.value=withDelay(i*900,withRepeat(withTiming(1,{duration:5200+i*700,easing:Easing.inOut(Easing.sin)}),-1,true));return()=>cancelAnimation(p);},[]);
-  const x0=150+i*14,y0=120+i*20;
+  const x0=150+i*14,y0=120+OFF+i*20;
   const style=useAnimatedStyle(()=>({opacity:0.25+0.45*Math.sin(p.value*Math.PI),transform:[{translateX:(x0+p.value*24)*s},{translateY:(y0-p.value*30)*s}]}));
   return <Animated.View pointerEvents="none" style={[{position:'absolute',left:0,top:0,width:3,height:3,borderRadius:2,backgroundColor:'#FFF6C8'},style]}/>;
 }
@@ -362,7 +426,7 @@ function Mote({s,i}:{s:number;i:number}){
 function Note({s,i}:{s:number;i:number}){
   const p=useSharedValue(0);
   useEffect(()=>{p.value=withDelay(i*700,withRepeat(withTiming(1,{duration:2100,easing:Easing.out(Easing.quad)}),-1,false));return()=>cancelAnimation(p);},[]);
-  const style=useAnimatedStyle(()=>({opacity:interpolate(p.value,[0,0.15,0.8,1],[0,1,1,0]),transform:[{translateX:(96+p.value*(i%2?18:-10))*s},{translateY:(132-p.value*46)*s},{rotate:`${(p.value-0.5)*30}deg`}]}));
+  const style=useAnimatedStyle(()=>({opacity:interpolate(p.value,[0,0.15,0.8,1],[0,1,1,0]),transform:[{translateX:(96+p.value*(i%2?18:-10))*s},{translateY:(132+OFF-p.value*46)*s},{rotate:`${(p.value-0.5)*30}deg`}]}));
   return <Animated.Text pointerEvents="none" style={[{position:'absolute',left:0,top:0,fontSize:14*s,fontWeight:'900',color:['#FFD166','#FF7EB6','#7ED3C6'][i]},style]}>{i===1?'♫':'♪'}</Animated.Text>;
 }
 function Zed({delay,size}:{delay:number;size:number}){

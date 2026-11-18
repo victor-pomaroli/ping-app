@@ -28,6 +28,12 @@ A cada versão:
 - **Visual do Ping**: 11 acessórios na lojinha (chapéus, coroa, fones, óculos, gravata, cachecol e medalha). O que o Ping veste aparece na aba Hoje, no Cantinho e nas Conquistas, e fica salvo (inclusive no backup).
 - **Conquistas repaginadas**: o Ping dentro do anel de amizade, números do seu progresso, próxima conquista em destaque e medalhas com barra de progresso e data.
 - Cantinho com rolagem única, filtros fixos ao rolar e espaçamentos padronizados.
+- **Cantinho em tela cheia**: o quarto ganhou teto e frente e ocupa a tela toda; "Abrir lojinha" encolhe o quarto e deixa ele preso no topo enquanto a loja rola. 11 itens novos: ventilador de teto (gira), luminária pendente, varal de luzinhas (pisca), relógio de parede (hora real), prateleira, letreiro neon (acende), lousa de tarefas, televisão (liga e passa cenas), gatinho (respira), aquário e violão.
+
+### Corrigido
+- No Cantinho, o Ping pedia para ligar a luz mesmo com a luminária acesa.
+
+### Adicionado (cont.)
 - Estrutura interna do Ping Pro com o paywall desligado: nada muda para quem usa o app hoje.
 
 ### Alterado

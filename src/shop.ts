@@ -7,13 +7,14 @@
 import type {RewardDb} from './rewards.ts';
 const getBalance=async(db:RewardDb):Promise<number>=>(await db.getFirstAsync<{b:number}>('SELECT COALESCE(SUM(amount),0) AS b FROM wallet_transactions'))?.b??0;
 
-export type SlotId='wall'|'floor'|'corner'|'table'|'seat'|'ping_head'|'ping_face'|'ping_neck';
+export type SlotId='wall'|'floor'|'corner'|'table'|'seat'|'ceiling'|'high'|'media'|'front'|'ping_head'|'ping_face'|'ping_neck';
 export const PING_SLOTS:readonly SlotId[]=['ping_head','ping_face','ping_neck'];
 export const isPingSlot=(s:SlotId)=>PING_SLOTS.includes(s);
 export type ShopItem={id:string;name:string;slot:SlotId;price:number;description:string;/** Reservado à Fase 6 (Pro): hoje nenhum item é Pro. */proOnly?:boolean};
 /** Hipótese de catálogo e preços: calibrar com o beta. */
 export const SLOTS:readonly {id:SlotId;name:string}[]=[
-  {id:'wall',name:'Parede'},{id:'floor',name:'Chão'},{id:'corner',name:'Canto'},{id:'table',name:'Mesinha'},{id:'seat',name:'Assento'},
+  {id:'wall',name:'Quadro'},{id:'floor',name:'Tapete'},{id:'corner',name:'Canto'},{id:'table',name:'Mesinha'},{id:'seat',name:'Assento'},
+  {id:'ceiling',name:'Teto'},{id:'high',name:'Parede alta'},{id:'media',name:'Parede da TV'},{id:'front',name:'Frente'},
   {id:'ping_head',name:'Cabeça'},{id:'ping_face',name:'Rosto'},{id:'ping_neck',name:'Pescoço'},
 ];
 export const CATALOG:readonly ShopItem[]=[
@@ -28,6 +29,17 @@ export const CATALOG:readonly ShopItem[]=[
   {id:'radio',name:'Rádio retrô',slot:'table',price:70,description:'Toque para tocar uma música.'},
   {id:'pufe',name:'Pufe',slot:'seat',price:45,description:'Afunda que é uma beleza.'},
   {id:'sofa',name:'Sofá',slot:'seat',price:80,description:'O trono oficial do Ping.'},
+  {id:'ventilador',name:'Ventilador de teto',slot:'ceiling',price:90,description:'Toque para ligar. Gira de verdade.'},
+  {id:'pendente',name:'Luminária pendente',slot:'ceiling',price:60,description:'Luz de café descolado.'},
+  {id:'luzinhas',name:'Varal de luzinhas',slot:'ceiling',price:70,description:'Pisca-pisca o ano inteiro.'},
+  {id:'relogio',name:'Relógio de parede',slot:'high',price:50,description:'Marca a hora certinha.'},
+  {id:'prateleira',name:'Prateleira',slot:'high',price:65,description:'Livros, troféu e uma plantinha.'},
+  {id:'neon',name:'Letreiro neon',slot:'high',price:110,description:'Faça acontecer, em neon. Toque para acender.'},
+  {id:'lousa',name:'Lousa de tarefas',slot:'media',price:45,description:'Duas feitas, uma faltando.'},
+  {id:'televisao',name:'Televisão',slot:'media',price:130,description:'Toque para ligar. O Ping adora.'},
+  {id:'gatinho',name:'Gatinho',slot:'front',price:120,description:'Dorme o dia todo na almofada.'},
+  {id:'aquario',name:'Aquário',slot:'front',price:95,description:'Dois peixinhos e muita calma.'},
+  {id:'violao',name:'Violão',slot:'front',price:75,description:'Encostado, esperando inspiração.'},
   {id:'chapeu_festa',name:'Chapéu de festa',slot:'ping_head',price:40,description:'Todo dia é dia de concluir.'},
   {id:'laco',name:'Laço',slot:'ping_head',price:45,description:'Fofura em dobro.'},
   {id:'bone',name:'Boné',slot:'ping_head',price:60,description:'Aba pro lado, estilo garantido.'},

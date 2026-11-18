@@ -4,7 +4,7 @@ import type {NotificationPersonality} from './preferences';
  * Falas do Ping no Cantinho. Mesmas três personalidades da aba Hoje, frases curtas (duas linhas no balão).
  * Situações do quarto e uma lista por item: o Ping comenta o que você toca, o que você está provando e o que comprou.
  */
-export type RoomSituation='entrar'|'vazio'|'toque'|'cansado'|'ocioso'|'soneca'|'acordou'|'provando'|'comprou'|'semMoeda'|'sino'|'noite';
+export type RoomSituation='noiteSemLuz'|'entrar'|'vazio'|'toque'|'cansado'|'ocioso'|'soneca'|'acordou'|'provando'|'comprou'|'semMoeda'|'sino'|'noite';
 export type ItemLines={toque:string[];provando:string[];comprou:string[]};
 
 const ROOM:Record<NotificationPersonality,Record<RoomSituation,string[]>>={
@@ -20,7 +20,8 @@ const ROOM:Record<NotificationPersonality,Record<RoomSituation,string[]>>={
     comprou:['Gastou bem. Pela primeira vez.','Agora sim, um lar.','Obrigado. Eu mereço.'],
     semMoeda:['Faltou moeda. Vai concluir tarefa.','Tá caro? Não, tá pobre.'],
     sino:['DING. Tô vivo.','Isso foi alto até pra mim.'],
-    noite:['Tá escuro aqui. Acende a luz?','De noite eu fico misterioso.'],
+    noite:['Tá escuro aqui. Acende a luminária?','Luminária apagada de noite? Corajoso.'],
+    noiteSemLuz:['Escuro, hein. Uma luz cairia bem.','De noite eu fico misterioso.'],
   },
   semPaciencia:{
     entrar:['Entrou. Agora não bagunça.','Rápido, tenho coisas a fazer.','Veio ver ou veio comprar?'],
@@ -34,7 +35,8 @@ const ROOM:Record<NotificationPersonality,Record<RoomSituation,string[]>>={
     comprou:['Finalmente.','Comprado. Agora volta pras tarefas.'],
     semMoeda:['Sem moeda. Sabe o que fazer.','Conclui tarefa e volta.'],
     sino:['DING! Satisfeito?','Barulho resolvido.'],
-    noite:['Tá escuro. Liga a luz.'],
+    noite:['Tá escuro. Liga a luminária.'],
+    noiteSemLuz:['Sem luz nenhuma. Compra uma.'],
   },
   deBoa:{
     entrar:['Oi! Que bom te ver aqui.','Fica à vontade, a casa é nossa.','Chegou visita! Que alegria.'],
@@ -48,10 +50,66 @@ const ROOM:Record<NotificationPersonality,Record<RoomSituation,string[]>>={
     comprou:['Amei! Obrigado!','Ficou a nossa cara.','Que capricho, valeu!'],
     semMoeda:['Sem pressa, a gente junta.','Umas tarefinhas e é nosso.'],
     sino:['Ding-dong! Hehe.','Sininho alegre.'],
-    noite:['Já é noite. Que tal a luzinha?'],
+    noite:['Já é noite. Acende a luminária?'],
+    noiteSemLuz:['Tá escurinho. Uma luz ia ser bom.'],
   },
 };
 const ITEMS:Record<string,Record<NotificationPersonality,ItemLines>>={
+  ventilador:{
+    debochado:{toque:['Vento grátis. Diferente da loja.','Gira, gira, igual sua agenda.'],provando:['Um ventinho cairia bem.'],comprou:['Agora sim, clima controlado.']},
+    semPaciencia:{toque:['Ventilador. Pronto.','Não fica ligando e desligando.'],provando:['Útil. Compra.'],comprou:['Ar circulando. Trabalha.']},
+    deBoa:{toque:['Que ventinho gostoso!','Brisa de fim de tarde.'],provando:['Vai ficar fresquinho.'],comprou:['Que alívio, valeu!']},
+  },
+  pendente:{
+    debochado:{toque:['Luz de cafeteria hipster.','Iluminado. Eu, não você.'],provando:['Chique demais.'],comprou:['Agora parece revista de decoração.']},
+    semPaciencia:{toque:['Luz. Funciona.'],provando:['Decide.'],comprou:['Iluminado.']},
+    deBoa:{toque:['Que luz bonita.'],provando:['Aconchegante!'],comprou:['Ficou um charme!']},
+  },
+  luzinhas:{
+    debochado:{toque:['Natal o ano todo. Ousado.','Pisca-pisca, igual minha paciência.'],provando:['Brega? Talvez. Amo.'],comprou:['Festa permanente.']},
+    semPaciencia:{toque:['Pisca demais.','Bonito. Próximo.'],provando:['Ok.'],comprou:['Luzinhas instaladas.']},
+    deBoa:{toque:['Parece céu estrelado!','Que alegria essas luzinhas.'],provando:['Amei!'],comprou:['Ficou mágico!']},
+  },
+  relogio:{
+    debochado:{toque:['O tempo passa. Suas tarefas, não.','Tic-tac. Sabe o que é isso?'],provando:['Pra você ver a hora que perdeu.'],comprou:['Agora não tem desculpa de horário.']},
+    semPaciencia:{toque:['Olha a hora. Anda.','Tic-tac.'],provando:['Útil. Compra.'],comprou:['Hora certa, sem desculpa.']},
+    deBoa:{toque:['Ainda dá tempo, relaxa.','Tic-tac, sem pressa.'],provando:['Combina com a parede.'],comprou:['Pontualidade, que fofo.']},
+  },
+  prateleira:{
+    debochado:{toque:['Livros que eu juro que li.','O troféu é meu. Óbvio.'],provando:['Ar intelectual.'],comprou:['Agora pareço culto.']},
+    semPaciencia:{toque:['Não mexe nos livros.'],provando:['Organizado. Gosto.'],comprou:['Prateleira ok.']},
+    deBoa:{toque:['Que coleção bonita!'],provando:['Cheio de histórias.'],comprou:['Cantinho da leitura!']},
+  },
+  neon:{
+    debochado:{toque:['Até em neon eu tenho razão.','Brilha mais que sua motivação.'],provando:['Lema de vida, versão balada.'],comprou:['Agora é oficial: faça acontecer.']},
+    semPaciencia:{toque:['Lê. Faz.','Neon ligado. Tarefas também?'],provando:['Motivacional. Compra.'],comprou:['Recado dado.']},
+    deBoa:{toque:['Que luz bonita!','Me inspira, viu?'],provando:['Que brilho!'],comprou:['Ficou incrível!']},
+  },
+  lousa:{
+    debochado:{toque:['Duas feitas. A terceira é sua.','Lista bonita. Cumprida? Quase.'],provando:['Combina com quem tem lista.'],comprou:['Agora até a parede te cobra.']},
+    semPaciencia:{toque:['Falta uma. Vai.','Risca a última.'],provando:['Útil.'],comprou:['Lista na parede. Sem desculpa.']},
+    deBoa:{toque:['Olha quanta coisa feita!'],provando:['Organizadinho.'],comprou:['Lista fofa!']},
+  },
+  televisao:{
+    debochado:{toque:['Só um episódio. Ou dez.','Desliga e vai trabalhar. Brincadeira. Ou não.'],provando:['Maratona à vista.'],comprou:['Agora sim, entretenimento de qualidade: eu.']},
+    semPaciencia:{toque:['TV só depois das tarefas.','Cinco minutos. Contados.'],provando:['Tela grande. Ok.'],comprou:['TV instalada. Use com moderação.']},
+    deBoa:{toque:['Sessão pipoca!','Vem assistir comigo.'],provando:['Imagina os filmes!'],comprou:['Cineminha particular!']},
+  },
+  gatinho:{
+    debochado:{toque:['Ele dorme mais que você. E rende mais.','Não acorda o chefe da casa.'],provando:['Um colega de quarto que não paga aluguel.'],comprou:['Agora eu tenho um pet. Ele me ignora.']},
+    semPaciencia:{toque:['Deixa ele dormir.','Shh.'],provando:['Fofo. Compra.'],comprou:['Gato adotado. Cuida.']},
+    deBoa:{toque:['Ele ronrona tão baixinho.','Que soninho bom ele tem.'],provando:['Ai, que gatinho!'],comprou:['Bem-vindo, amiguinho!']},
+  },
+  aquario:{
+    debochado:{toque:['Os peixes têm mais foco que você.','Glub. Tradução: trabalha.'],provando:['Terapia aquática.'],comprou:['Dois novos fãs.']},
+    semPaciencia:{toque:['Não bate no vidro.'],provando:['Calmo. Ok.'],comprou:['Peixes ok.']},
+    deBoa:{toque:['Olha eles nadando!','Que calma dá ver isso.'],provando:['Que relaxante!'],comprou:['Oi, peixinhos!']},
+  },
+  violao:{
+    debochado:{toque:['Sei três acordes. Todos errados.','Plim. Pronto, show acabou.'],provando:['Combina com meu lado artista.'],comprou:['Turnê mundial começa amanhã.']},
+    semPaciencia:{toque:['Toca depois das tarefas.'],provando:['Ok.'],comprou:['Violão. Ensaia no intervalo.']},
+    deBoa:{toque:['Bora um sonzinho?','Plim plim!'],provando:['Que lindo!'],comprou:['Luau no Cantinho!']},
+  },
   planta:{
     debochado:{toque:['Rego toda semana. Mentira.','Ela me entende mais que você.'],provando:['Verde combina com meu ego.'],comprou:['Uma planta. Agora sou responsável.']},
     semPaciencia:{toque:['Não arranca folha.','Planta não se toca.'],provando:['Planta é útil. Compra.'],comprou:['Ok, oxigênio garantido.']},
